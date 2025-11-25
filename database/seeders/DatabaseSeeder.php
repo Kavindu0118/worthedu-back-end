@@ -27,5 +27,7 @@ class DatabaseSeeder extends Seeder
 
         // Seed the specific user
         $this->call(UserSeeder::class);
+        // Seed a sample learner record linked to an existing user
+        $this->call(LearnerSeeder::class);
     }
 }
