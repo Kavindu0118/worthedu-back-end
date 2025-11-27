@@ -48,4 +48,20 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * Get the learner profile associated with the user.
+     */
+    public function learner()
+    {
+        return $this->hasOne(Learner::class);
+    }
+
+    /**
+     * Get the instructor profile associated with the user.
+     */
+    public function instructor()
+    {
+        return $this->hasOne(Instructor::class);
+    }
 }
