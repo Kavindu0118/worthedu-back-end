@@ -32,6 +32,7 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
 	
 	// Instructor course management routes
 	Route::prefix('instructor')->group(function () {
+		Route::get('/dashboard', [CourseController::class, 'dashboard']);
 		Route::post('/courses', [CourseController::class, 'store']);
 		Route::get('/courses', [CourseController::class, 'instructorCourses']);
 		Route::put('/courses/{id}', [CourseController::class, 'update']);

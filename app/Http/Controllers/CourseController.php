@@ -40,12 +40,12 @@ class CourseController extends Controller
             // Validate the request
             $data = $request->validate([
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'required|string',
             'price' => 'required|numeric|min:0',
             'level' => 'required|in:beginner,intermediate,advanced',
-            'duration' => 'nullable|integer',
+            'duration' => 'nullable|string',
             'thumbnail' => 'nullable|string',
-            'status' => 'nullable|in:draft,published,archived',
+            'status' => 'required|in:draft,published,archived',
             'modules' => 'required|array|min:1',
             'modules.*.title' => 'required|string|max:255',
             'modules.*.description' => 'nullable|string',
@@ -182,6 +182,58 @@ class CourseController extends Controller
 
         return response()->json([
             'courses' => $courses,
+        ]);
+    }
+
+    /**
+     * Get instructor dashboard data
+     */
+    public function dashboard(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'instructor') {
+            return response()->json(['message' => 'Only instructors can access this'], 403);
+        }
+
+        $instructor = $user->instructor;
+        if (!$instructor) {
+            return response()->json(['message' => 'Instructor profile not found'], 404);
+        }
+
+        // Get all courses for this instructor
+        $courses = Course::with(['modules.quizzes', 'enrollments'])
+            ->where('instructor_id', $instructor->instructor_id)
+            ->get();
+
+        // Calculate stats
+        $totalStudents = $courses->sum(function ($course) {
+            return $course->enrollments->count();
+        });
+
+        $totalEarnings = $courses->sum(function ($course) {
+            return $course->enrollments->count() * $course->price;
+        });
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'role' => $user->role,
+                'instructor' => [
+                    'instructor_id' => $instructor->instructor_id,
+                    'first_name' => $instructor->first_name,
+                    'last_name' => $instructor->last_name,
+                    'status' => $instructor->status,
+                ]
+            ],
+            'courses' => $courses,
+            'stats' => [
+                'total_courses' => $courses->count(),
+                'total_students' => $totalStudents,
+                'total_earnings' => $totalEarnings,
+            ]
         ]);
     }
 
