@@ -23,6 +23,12 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'avatar',
+        'bio',
+        'phone',
+        'date_of_birth',
+        'membership_type',
+        'membership_expires_at',
     ];
 
     /**
@@ -46,6 +52,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'date_of_birth' => 'date',
+            'membership_expires_at' => 'datetime',
         ];
     }
 
@@ -63,5 +71,71 @@ class User extends Authenticatable
     public function instructor()
     {
         return $this->hasOne(Instructor::class);
+    }
+
+    /**
+     * Get the enrollments for the user.
+     */
+    public function enrollments()
+    {
+        return $this->hasMany(Enrollment::class, 'learner_id', 'id');
+    }
+
+    /**
+     * Get the courses the user is enrolled in.
+     */
+    public function enrolledCourses()
+    {
+        return $this->belongsToMany(Course::class, 'enrollments', 'learner_id', 'course_id')
+                    ->withPivot('progress', 'status', 'enrolled_at', 'completed_at', 'last_accessed_at')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Get the lesson progress for the user.
+     */
+    public function lessonProgress()
+    {
+        return $this->hasMany(LessonProgress::class);
+    }
+
+    /**
+     * Get the assignment submissions for the user.
+     */
+    public function assignmentSubmissions()
+    {
+        return $this->hasMany(AssignmentSubmission::class);
+    }
+
+    /**
+     * Get the quiz attempts for the user.
+     */
+    public function quizAttempts()
+    {
+        return $this->hasMany(QuizAttempt::class);
+    }
+
+    /**
+     * Get the notifications for the user.
+     */
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class)->latest();
+    }
+
+    /**
+     * Get the activity logs for the user.
+     */
+    public function activityLogs()
+    {
+        return $this->hasMany(LearnerActivityLog::class);
+    }
+
+    /**
+     * Get the certificates for the user.
+     */
+    public function certificates()
+    {
+        return $this->hasMany(Certificate::class);
     }
 }

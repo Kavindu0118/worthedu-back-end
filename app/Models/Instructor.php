@@ -29,6 +29,14 @@ class Instructor extends Model
     ];
 
     /**
+     * The attributes that should be hidden for serialization.
+     * Prevents binary CV data from causing JSON encoding errors.
+     */
+    protected $hidden = [
+        'cv', // Hide binary CV data from JSON responses
+    ];
+
+    /**
      * Define the relationship: An Instructor belongs to one User.
      */
     public function user()

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Course Update API</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        input, textarea, select { width: 100%; padding: 8px; margin: 5px 0 15px 0; }
+        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background: #45a049; }
+        .result { margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e9; color: #2e7d32; }
+        label { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Course Update API</h1>
+    
+    <div>
+        <label>Bearer Token:</label>
+        <input type="text" id="token" placeholder="Paste your authorization token here">
+    </div>
+    
+    <div>
+        <label>Course ID:</label>
+        <input type="number" id="courseId" value="1">
+    </div>
+    
+    <div>
+        <label>New Title:</label>
+        <input type="text" id="title" value="DIRECT TEST UPDATE" placeholder="Leave empty to skip">
+    </div>
+    
+    <div>
+        <label>New Category:</label>
+        <input type="text" id="category" value="Test Category Direct" placeholder="Leave empty to skip">
+    </div>
+    
+    <div>
+        <label>New Description:</label>
+        <textarea id="description" rows="3" placeholder="Leave empty to skip">This is a direct API test at ${new Date().toLocaleString()}</textarea>
+    </div>
+    
+    <div>
+        <label>Price:</label>
+        <input type="number" id="price" placeholder="Leave empty to skip">
+    </div>
+    
+    <div>
+        <label>Level:</label>
+        <select id="level">
+            <option value="">-- Don't change --</option>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+        </select>
+    </div>
+    
+    <div>
+        <label>Status:</label>
+        <select id="status">
+            <option value="">-- Don't change --</option>
+            <option value="draft">Draft</option>
+            <option value="published" selected>Published</option>
+            <option value="archived">Archived</option>
+        </select>
+    </div>
+    
+    <button onclick="testUpdate()">🚀 Send PUT Request</button>
+    <button onclick="getCurrentCourse()" style="background: #2196F3;">📥 Get Current Course</button>
+    
+    <div id="result" class="result" style="display: none;"></div>
+    
+    <script>
+        async function testUpdate() {
+            const token = document.getElementById('token').value;
+            const courseId = document.getElementById('courseId').value;
+            
+            if (!token) {
+                alert('Please enter your Bearer token!');
+                return;
+            }
+            
+            // Build update object with only non-empty fields
+            const updateData = {};
+            
+            const title = document.getElementById('title').value;
+            if (title) updateData.title = title;
+            
+            const category = document.getElementById('category').value;
+            if (category) updateData.category = category;
+            
+            const description = document.getElementById('description').value;
+            if (description) updateData.description = description;
+            
+            const price = document.getElementById('price').value;
+            if (price) updateData.price = parseFloat(price);
+            
+            const level = document.getElementById('level').value;
+            if (level) updateData.level = level;
+            
+            const status = document.getElementById('status').value;
+            if (status) updateData.status = status;
+            
+            console.log('Sending PUT request with data:', updateData);
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = '⏳ Sending request...';
+            
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/instructor/courses/${courseId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(updateData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <h3>✅ Update Successful!</h3>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Updated Course:</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `
+                        <h3>❌ Update Failed</h3>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Error:</strong></p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ Network Error</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+        
+        async function getCurrentCourse() {
+            const token = document.getElementById('token').value;
+            const courseId = document.getElementById('courseId').value;
+            
+            if (!token) {
+                alert('Please enter your Bearer token!');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = '⏳ Fetching course...';
+            
+            try {
+                const response = await fetch(`http://127.0.0.1:8000/api/instructor/courses/${courseId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <h3>📥 Current Course Data</h3>
+                        <p><strong>ID:</strong> ${data.data.id}</p>
+                        <p><strong>Title:</strong> ${data.data.title}</p>
+                        <p><strong>Category:</strong> ${data.data.category || 'None'}</p>
+                        <p><strong>Description:</strong> ${data.data.description.substring(0, 100)}...</p>
+                        <p><strong>Status:</strong> ${data.data.status}</p>
+                        <p><strong>Updated At:</strong> ${data.data.updated_at}</p>
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `
+                        <h3>❌ Fetch Failed</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>❌ Network Error</h3><p>${error.message}</p>`;
+            }
+        }
+        
+        // Auto-fill description timestamp
+        window.addEventListener('load', () => {
+            const desc = document.getElementById('description');
+            desc.value = desc.value.replace('${new Date().toLocaleString()}', new Date().toLocaleString());
+        });
+    </script>
+</body>
+</html>

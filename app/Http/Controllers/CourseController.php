@@ -7,55 +7,27 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Course;
-use App\Models\Module;
-use App\Models\Quiz;
+use App\Models\CourseModule;
+use App\Http\Resources\CourseDetailResource;
 
 class CourseController extends Controller
 {
     /**
-     * Create a new course with modules and quizzes
+     * Create a new course (modules/quizzes/assignments added separately via other endpoints)
      */
     public function store(Request $request)
     {
-        Log::info('Course creation request received', [
-            'user_id' => Auth::id(),
-            'title' => $request->input('title'),
-            'modules_raw' => substr(json_encode($request->input('modules')), 0, 100),
-        ]);
-
         try {
-            // Handle JSON string for modules if sent as string
-            $modulesData = $request->input('modules');
-            if (is_string($modulesData)) {
-                $modulesData = json_decode($modulesData, true);
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    return response()->json([
-                        'message' => 'Invalid JSON for modules',
-                        'error' => json_last_error_msg()
-                    ], 422);
-                }
-                $request->merge(['modules' => $modulesData]);
-            }
-
             // Validate the request
             $data = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'price' => 'required|numeric|min:0',
-            'level' => 'required|in:beginner,intermediate,advanced',
-            'duration' => 'nullable|string',
-            'thumbnail' => 'nullable|string',
-            'status' => 'required|in:draft,published,archived',
-            'modules' => 'required|array|min:1',
-            'modules.*.title' => 'required|string|max:255',
-            'modules.*.description' => 'nullable|string',
-            'modules.*.content' => 'nullable|string',
-            'modules.*.duration' => 'nullable|integer',
-            'modules.*.quizzes' => 'nullable|array',
-            'modules.*.quizzes.*.question' => 'required|string',
-            'modules.*.quizzes.*.options' => 'required|array|min:2',
-            'modules.*.quizzes.*.correct_answer' => 'required|integer|min:0',
-            'modules.*.quizzes.*.points' => 'nullable|integer|min:0',
+                'title' => 'required|string|max:255',
+                'description' => 'required|string',
+                'category' => 'required|string|max:100',
+                'price' => 'required|numeric|min:0',
+                'level' => 'required|in:beginner,intermediate,advanced',
+                'duration' => 'nullable|string',
+                'thumbnail' => 'nullable|string',
+                'status' => 'required|in:draft,published,archived',
             ]);
 
             // Get authenticated instructor
@@ -74,66 +46,24 @@ class CourseController extends Controller
                 return response()->json(['message' => 'Your instructor account is not approved yet'], 403);
             }
 
-            DB::beginTransaction();
-            try {
             // Create the course
             $course = Course::create([
                 'instructor_id' => $instructor->instructor_id,
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
+                'category' => $data['category'] ?? null,
                 'price' => $data['price'],
                 'level' => $data['level'],
                 'duration' => $data['duration'] ?? null,
                 'thumbnail' => $data['thumbnail'] ?? null,
                 'status' => $data['status'] ?? 'draft',
+                'student_count' => 0,
             ]);
-
-            // Create modules and their quizzes
-            foreach ($data['modules'] as $index => $moduleData) {
-                $module = Module::create([
-                    'course_id' => $course->id,
-                    'title' => $moduleData['title'],
-                    'description' => $moduleData['description'] ?? null,
-                    'content' => $moduleData['content'] ?? null,
-                    'duration' => $moduleData['duration'] ?? null,
-                    'order' => $index + 1,
-                ]);
-
-                // Create quizzes for this module
-                if (isset($moduleData['quizzes']) && is_array($moduleData['quizzes'])) {
-                    foreach ($moduleData['quizzes'] as $quizData) {
-                        Quiz::create([
-                            'module_id' => $module->id,
-                            'question' => $quizData['question'],
-                            'options' => $quizData['options'],
-                            'correct_answer' => $quizData['correct_answer'],
-                            'points' => $quizData['points'] ?? 10,
-                        ]);
-                    }
-                }
-            }
-
-            DB::commit();
-
-            // Load the course with its modules and quizzes
-            $course->load(['modules.quizzes']);
 
             return response()->json([
                 'message' => 'Course created successfully',
                 'course' => $course,
             ], 201);
-
-            } catch (\Throwable $e) {
-                DB::rollBack();
-                Log::error('Course creation database error', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-                return response()->json([
-                    'message' => 'Failed to create course',
-                    'error' => $e->getMessage()
-                ], 500);
-            }
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Course validation error', ['errors' => $e->errors()]);
@@ -154,35 +84,69 @@ class CourseController extends Controller
     }
 
     /**
-     * Get all courses (optional: filter by instructor)
+     * Get all published courses with filtering (public endpoint)
      */
     public function index(Request $request)
     {
-        $query = Course::with(['modules.quizzes', 'instructor']);
+        try {
+            $query = Course::query()
+                ->where('status', 'published')
+                ->withCount('courseModules');
 
-        // Filter by instructor if requested
-        if ($request->has('instructor_id')) {
-            $query->where('instructor_id', $request->instructor_id);
+            // Filter by category (case-insensitive)
+            if ($request->has('category') && $request->category !== '' && $request->category !== 'All') {
+                $query->where('category', $request->category);
+            }
+
+            // Filter by level
+            if ($request->has('level') && $request->level !== '') {
+                $query->where('level', $request->level);
+            }
+
+            // Search in title and description (case-insensitive)
+            if ($request->has('search') && !empty($request->search)) {
+                $searchTerm = $request->search;
+                $query->where(function($q) use ($searchTerm) {
+                    $q->where('title', 'like', "%{$searchTerm}%")
+                      ->orWhere('description', 'like', "%{$searchTerm}%");
+                });
+            }
+
+            // Order by most recent
+            $query->orderBy('created_at', 'desc');
+
+            $courses = $query->get()->map(function($course) {
+                return [
+                    'id' => $course->id,
+                    'instructor_id' => $course->instructor_id,
+                    'title' => $course->title,
+                    'category' => $course->category,
+                    'description' => $course->description,
+                    'price' => (float) $course->price,
+                    'level' => $course->level,
+                    'duration' => $course->duration,
+                    'thumbnail' => $course->thumbnail ? url('storage/' . $course->thumbnail) : null,
+                    'status' => $course->status,
+                    'student_count' => $course->student_count ?? 0,
+                    'modules_count' => $course->course_modules_count ?? 0,
+                    'created_at' => $course->created_at,
+                    'updated_at' => $course->updated_at,
+                ];
+            });
+
+            return response()->json($courses);
+
+        } catch (\Throwable $e) {
+            Log::error('Failed to fetch courses', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to fetch courses',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Filter by level
-        if ($request->has('level')) {
-            $query->where('level', $request->level);
-        }
-
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        } else {
-            // By default, only show published courses
-            $query->where('status', 'published');
-        }
-
-        $courses = $query->get();
-
-        return response()->json([
-            'courses' => $courses,
-        ]);
     }
 
     /**
@@ -201,7 +165,7 @@ class CourseController extends Controller
         }
 
         // Get all courses for this instructor
-        $courses = Course::with(['modules.quizzes', 'enrollments'])
+        $courses = Course::with(['courseModules', 'enrollments'])
             ->where('instructor_id', $instructor->instructor_id)
             ->get();
 
@@ -253,7 +217,7 @@ class CourseController extends Controller
         }
 
         // Get all courses for this instructor
-        $courses = Course::with(['modules.quizzes', 'enrollments'])
+        $courses = Course::with(['courseModules', 'enrollments'])
             ->where('instructor_id', $instructor->instructor_id)
             ->get();
 
@@ -277,19 +241,22 @@ class CourseController extends Controller
     }
 
     /**
-     * Get a single course by ID
+     * Get a single course by ID with all nested content
      */
     public function show($id)
     {
-        $course = Course::with(['modules.quizzes', 'instructor'])->find($id);
+        $course = Course::with([
+            'courseModules.quizzes',
+            'courseModules.assignments',
+            'courseModules.notes',
+            'instructor'
+        ])->find($id);
 
         if (!$course) {
             return response()->json(['message' => 'Course not found'], 404);
         }
 
-        return response()->json([
-            'course' => $course,
-        ]);
+        return new CourseDetailResource($course);
     }
 
     /**
@@ -297,39 +264,268 @@ class CourseController extends Controller
      */
     public function update(Request $request, $id)
     {
+        Log::info('=== Course Update Request Started ===', [
+            'course_id' => $id,
+            'request_all' => $request->all(),
+            'request_method' => $request->method(),
+        ]);
+
         $course = Course::find($id);
 
         if (!$course) {
+            Log::warning('Course not found', ['id' => $id]);
             return response()->json(['message' => 'Course not found'], 404);
         }
+
+        Log::info('Course found', [
+            'course_id' => $course->id,
+            'current_title' => $course->title,
+            'current_category' => $course->category,
+        ]);
 
         // Check if the authenticated user is the course instructor
         $user = Auth::user();
         if (!$user || $user->role !== 'instructor') {
+            Log::warning('Not an instructor', ['user_id' => $user ? $user->id : null]);
             return response()->json(['message' => 'Only instructors can update courses'], 403);
         }
 
         $instructor = $user->instructor;
         if (!$instructor || $course->instructor_id !== $instructor->instructor_id) {
+            Log::warning('Ownership check failed', [
+                'course_instructor_id' => $course->instructor_id,
+                'user_instructor_id' => $instructor ? $instructor->instructor_id : null,
+            ]);
             return response()->json(['message' => 'You can only update your own courses'], 403);
         }
 
-        $data = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'description' => 'sometimes|string',
-            'price' => 'sometimes|numeric|min:0',
-            'level' => 'sometimes|in:beginner,intermediate,advanced',
-            'duration' => 'sometimes|integer',
-            'thumbnail' => 'sometimes|string',
-            'status' => 'sometimes|in:draft,published,archived',
+        Log::info('Authorization passed');
+
+        // Validate all possible update fields - use 'sometimes' to only validate when present
+        $validated = $request->validate([
+            'title' => 'sometimes|required|string|max:255',
+            'category' => 'sometimes|string|max:100',
+            'description' => 'sometimes|required|string',
+            'price' => 'sometimes|required|numeric|min:0',
+            'level' => 'sometimes|required|in:beginner,intermediate,advanced',
+            'duration' => 'sometimes|string|max:50',
+            'status' => 'sometimes|required|in:draft,published,archived',
         ]);
 
-        $course->update($data);
+        Log::info('Validation passed', ['validated' => $validated]);
 
-        return response()->json([
-            'message' => 'Course updated successfully',
-            'course' => $course,
+        // Handle thumbnail upload if present
+        if ($request->hasFile('thumbnail')) {
+            $thumbnailPath = $request->file('thumbnail')->store('course-thumbnails', 'public');
+            $validated['thumbnail'] = $thumbnailPath;
+            Log::info('Thumbnail uploaded', ['path' => $thumbnailPath]);
+        }
+
+        // Update the course with validated data
+        Log::info('Attempting to update course', ['data' => $validated]);
+        $course->update($validated);
+        Log::info('Course updated in database');
+        
+        // Refresh the course model to get updated data
+        $course->refresh();
+
+        Log::info('After refresh', [
+            'course_id' => $course->id,
+            'title' => $course->title,
+            'category' => $course->category,
+            'updated_at' => $course->updated_at,
         ]);
+        
+        // Load relationships for complete data
+        $course->load([
+            'courseModules' => function($query) {
+                $query->orderBy('order_index');
+            },
+            'courseModules.quizzes',
+            'courseModules.assignments',
+            'courseModules.notes'
+        ]);
+
+        // Format response manually to avoid binary data issues
+        $response = [
+            'id' => $course->id,
+            'instructor_id' => $course->instructor_id,
+            'title' => $course->title,
+            'category' => $course->category,
+            'description' => $course->description,
+            'price' => (float) $course->price,
+            'level' => $course->level,
+            'duration' => $course->duration,
+            'thumbnail' => $course->thumbnail,
+            'status' => $course->status,
+            'student_count' => $course->student_count ?? 0,
+            'modules_count' => $course->courseModules->count(),
+            'created_at' => $course->created_at->toISOString(),
+            'updated_at' => $course->updated_at->toISOString(),
+            'modules' => $course->courseModules->map(function ($module) {
+                return [
+                    'id' => $module->id,
+                    'course_id' => $module->course_id,
+                    'module_title' => $module->module_title,
+                    'module_description' => $module->module_description ?? '',
+                    'order_index' => $module->order_index,
+                    'duration' => $module->duration ?? '',
+                    'created_at' => $module->created_at->toISOString(),
+                    'updated_at' => $module->updated_at->toISOString(),
+                    'quizzes' => $module->quizzes->map(function ($quiz) {
+                        return [
+                            'id' => $quiz->id,
+                            'module_id' => $quiz->module_id,
+                            'quiz_title' => $quiz->quiz_title,
+                            'quiz_description' => $quiz->quiz_description ?? '',
+                            'quiz_data' => is_string($quiz->quiz_data) ? json_decode($quiz->quiz_data, true) : $quiz->quiz_data,
+                            'total_points' => $quiz->total_points ?? 0,
+                            'time_limit' => $quiz->time_limit,
+                            'created_at' => $quiz->created_at->toISOString(),
+                        ];
+                    }),
+                    'assignments' => $module->assignments->map(function ($assignment) {
+                        return [
+                            'id' => $assignment->id,
+                            'module_id' => $assignment->module_id,
+                            'assignment_title' => $assignment->assignment_title,
+                            'instructions' => $assignment->instructions ?? '',
+                            'attachment_url' => $assignment->attachment_url,
+                            'max_points' => $assignment->max_points ?? 100,
+                            'due_date' => $assignment->due_date,
+                            'created_at' => $assignment->created_at->toISOString(),
+                        ];
+                    }),
+                    'notes' => $module->notes->map(function ($note) {
+                        return [
+                            'id' => $note->id,
+                            'module_id' => $note->module_id,
+                            'note_title' => $note->note_title,
+                            'note_body' => $note->note_body ?? '',
+                            'attachment_url' => $note->attachment_url,
+                            'created_at' => $note->created_at->toISOString(),
+                        ];
+                    }),
+                ];
+            }),
+        ];
+
+        Log::info('Course updated successfully', [
+            'course_id' => $course->id,
+            'new_title' => $course->title,
+        ]);
+
+        // Return same format as showInstructorCourse
+        return response()->json(['data' => $response]);
+    }
+
+    /**
+     * Get course details with all nested content (for instructor course management)
+     */
+    public function showInstructorCourse($id)
+    {
+        try {
+            // Get authenticated user
+            $user = Auth::user();
+            
+            if (!$user) {
+                return response()->json(['message' => 'Unauthenticated'], 401);
+            }
+
+            // Get instructor profile
+            $instructor = $user->instructor;
+            
+            if (!$instructor) {
+                return response()->json(['message' => 'Not an instructor'], 403);
+            }
+
+            // Find course with all nested relationships
+            $course = Course::with([
+                'courseModules' => function($query) {
+                    $query->orderBy('order_index');
+                },
+                'courseModules.quizzes',
+                'courseModules.assignments',
+                'courseModules.notes'
+            ])->findOrFail($id);
+
+            // Verify ownership
+            if ($course->instructor_id != $instructor->instructor_id) {
+                return response()->json(['message' => 'Unauthorized - This course does not belong to you'], 403);
+            }
+
+            // Format the response
+            $data = [
+                'id' => $course->id,
+                'instructor_id' => $course->instructor_id,
+                'title' => $course->title,
+                'category' => $course->category ?? '',
+                'description' => $course->description,
+                'price' => (float) $course->price,
+                'level' => $course->level ?? 'beginner',
+                'duration' => $course->duration ?? '',
+                'thumbnail' => $course->thumbnail ? url('storage/' . $course->thumbnail) : null,
+                'status' => $course->status,
+                'student_count' => $course->student_count ?? 0,
+                'modules_count' => $course->courseModules->count(),
+                'created_at' => $course->created_at->toISOString(),
+                'updated_at' => $course->updated_at->toISOString(),
+                'modules' => $course->courseModules->map(function ($module) {
+                    return [
+                        'id' => $module->id,
+                        'course_id' => $module->course_id,
+                        'module_title' => $module->module_title,
+                        'module_description' => $module->module_description ?? '',
+                        'order_index' => $module->order_index,
+                        'duration' => $module->duration ?? '',
+                        'created_at' => $module->created_at->toISOString(),
+                        'updated_at' => $module->updated_at->toISOString(),
+                        'quizzes' => $module->quizzes->map(function ($quiz) {
+                            return [
+                                'id' => $quiz->id,
+                                'module_id' => $quiz->module_id,
+                                'quiz_title' => $quiz->quiz_title,
+                                'quiz_description' => $quiz->quiz_description ?? '',
+                                'quiz_data' => is_string($quiz->quiz_data) ? json_decode($quiz->quiz_data, true) : $quiz->quiz_data,
+                                'total_points' => $quiz->total_points ?? 0,
+                                'time_limit' => $quiz->time_limit,
+                                'created_at' => $quiz->created_at->toISOString(),
+                            ];
+                        }),
+                        'assignments' => $module->assignments->map(function ($assignment) {
+                            return [
+                                'id' => $assignment->id,
+                                'module_id' => $assignment->module_id,
+                                'assignment_title' => $assignment->assignment_title,
+                                'instructions' => $assignment->instructions ?? '',
+                                'attachment_url' => $assignment->attachment_url ? url('storage/' . $assignment->attachment_url) : null,
+                                'max_points' => $assignment->max_points ?? 100,
+                                'due_date' => $assignment->due_date,
+                                'created_at' => $assignment->created_at->toISOString(),
+                            ];
+                        }),
+                        'notes' => $module->notes->map(function ($note) {
+                            return [
+                                'id' => $note->id,
+                                'module_id' => $note->module_id,
+                                'note_title' => $note->note_title,
+                                'note_body' => $note->note_body ?? '',
+                                'attachment_url' => $note->attachment_url ? url('storage/' . $note->attachment_url) : null,
+                                'created_at' => $note->created_at->toISOString(),
+                            ];
+                        }),
+                    ];
+                }),
+            ];
+
+            return response()->json(['data' => $data]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Course not found'], 404);
+        } catch (\Exception $e) {
+            Log::error('Course show error: ' . $e->getMessage());
+            return response()->json(['message' => 'Failed to retrieve course', 'error' => $e->getMessage()], 500);
+        }
     }
 
     /**

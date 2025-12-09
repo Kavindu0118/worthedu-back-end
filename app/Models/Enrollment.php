@@ -14,16 +14,26 @@ class Enrollment extends Model
         'course_id',
         'enrolled_at',
         'progress',
+        'completed_at',
         'status',
+        'last_accessed_at',
     ];
 
     protected $casts = [
         'enrolled_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'last_accessed_at' => 'datetime',
+        'progress' => 'decimal:2',
     ];
 
     public function learner()
     {
         return $this->belongsTo(Learner::class, 'learner_id', 'learner_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'learner_id', 'id');
     }
 
     public function course()
