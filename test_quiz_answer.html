@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Quiz Answer Submission</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; }
+        label { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Test Quiz Answer Submission</h1>
+    
+    <div class="section">
+        <h3>Step 1: Start Quiz</h3>
+        <label>Quiz ID:</label>
+        <input type="number" id="quizId" value="6">
+        <button onclick="startQuiz()">Start Quiz</button>
+        <div id="startResult"></div>
+    </div>
+    
+    <div class="section">
+        <h3>Step 2: Submit Answer</h3>
+        <label>Attempt ID:</label>
+        <input type="number" id="attemptId" value="">
+        <label>Question ID:</label>
+        <input type="number" id="questionId" value="1">
+        <label>Answer:</label>
+        <input type="text" id="answer" value="background-color">
+        <button onclick="submitAnswer()">Submit Answer</button>
+        <div id="answerResult"></div>
+    </div>
+    
+    <div class="section">
+        <h3>Step 3: Submit Quiz</h3>
+        <button onclick="submitQuiz()">Submit Quiz</button>
+        <div id="submitResult"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api';
+        const TOKEN = 'N7udajf94BusCPoVNGIaV09BtRphYjuHRCkmwIbCtZwi6VsXnKo6qjPvIUID';
+
+        async function startQuiz() {
+            const quizId = document.getElementById('quizId').value;
+            const resultDiv = document.getElementById('startResult');
+            
+            try {
+                resultDiv.innerHTML = '<p>Starting quiz...</p>';
+                
+                const response = await fetch(`${API_BASE}/learner/quizzes/${quizId}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('attemptId').value = data.data.attempt_id;
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = '<h4>✅ Quiz Started!</h4>' +
+                        '<p>Attempt ID: ' + data.data.attempt_id + '</p>' +
+                        '<p>Questions: ' + data.data.questions.length + '</p>' +
+                        '<pre>' + JSON.stringify(data.data.questions, null, 2) + '</pre>';
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = '<h4>❌ Error</h4><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h4>❌ Network Error</h4><p>' + error.message + '</p>';
+            }
+        }
+
+        async function submitAnswer() {
+            const attemptId = document.getElementById('attemptId').value;
+            const questionId = document.getElementById('questionId').value;
+            const answer = document.getElementById('answer').value;
+            const resultDiv = document.getElementById('answerResult');
+            
+            try {
+                resultDiv.innerHTML = '<p>Submitting answer...</p>';
+                
+                const payload = {
+                    question_id: parseInt(questionId),
+                    answer: answer
+                };
+                
+                console.log('Sending:', payload);
+                
+                const response = await fetch(`${API_BASE}/learner/quiz-attempts/${attemptId}/answer`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                console.log('Response:', data);
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = '<h4>✅ Answer Saved!</h4><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = '<h4>❌ Error ' + response.status + '</h4><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h4>❌ Network Error</h4><p>' + error.message + '</p>';
+            }
+        }
+
+        async function submitQuiz() {
+            const attemptId = document.getElementById('attemptId').value;
+            const resultDiv = document.getElementById('submitResult');
+            
+            try {
+                resultDiv.innerHTML = '<p>Submitting quiz...</p>';
+                
+                const response = await fetch(`${API_BASE}/learner/quiz-attempts/${attemptId}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = '<h4>✅ Quiz Submitted!</h4>' +
+                        '<p>Score: ' + data.data.score + '%</p>' +
+                        '<p>Passed: ' + data.data.passed + '</p>' +
+                        '<pre>' + JSON.stringify(data.data, null, 2) + '</pre>';
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = '<h4>❌ Error</h4><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h4>❌ Network Error</h4><p>' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -146,6 +146,13 @@ class AuthController extends Controller
      */
     public function registerInstructor(Request $request)
     {
+        \Log::info('Instructor Registration Request', [
+            'all_data' => $request->all(),
+            'has_cv_file' => $request->hasFile('cv'),
+            'content_type' => $request->header('Content-Type'),
+            'files' => $request->allFiles(),
+        ]);
+
         $data = $request->validate([
             'first_name'            => 'required|string|max:255',
             'last_name'             => 'required|string|max:255',

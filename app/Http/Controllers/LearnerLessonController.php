@@ -20,7 +20,7 @@ class LearnerLessonController extends Controller
     {
         $user = Auth::user();
         
-        $module = CourseModule::with('course:id,title')->findOrFail($id);
+        $module = CourseModule::with(['course:id,title', 'notes'])->findOrFail($id);
         
         // Check if user is enrolled in the course
         $enrollment = Enrollment::where('learner_id', $user->id)
@@ -53,6 +53,18 @@ class LearnerLessonController extends Controller
             ->orderBy('order_index', 'desc')
             ->first();
         
+        // Format notes for learner
+        $notes = $module->notes->map(function($note) {
+            return [
+                'id' => $note->id,
+                'title' => $note->note_title,
+                'body' => $note->note_body,
+                'attachment_url' => $note->full_attachment_url,
+                'attachment_name' => $note->attachment_name,
+                'created_at' => $note->created_at->toISOString(),
+            ];
+        });
+        
         return response()->json([
             'success' => true,
             'data' => [
@@ -68,6 +80,7 @@ class LearnerLessonController extends Controller
                 'duration_minutes' => $module->duration_minutes,
                 'order_index' => $module->order_index,
                 'is_mandatory' => $module->is_mandatory ?? true,
+                'notes' => $notes,
                 'progress' => $progress ? [
                     'status' => $progress->status,
                     'started_at' => $progress->started_at ? $progress->started_at->toISOString() : null,

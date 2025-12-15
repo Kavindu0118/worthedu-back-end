@@ -7,6 +7,12 @@ use App\Http\Controllers\ModuleController;
 use App\Http\Controllers\QuizController;
 use App\Http\Controllers\AssignmentController;
 use App\Http\Controllers\NoteController;
+use App\Http\Controllers\EnrollmentController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\CouponController;
+use App\Http\Controllers\PaymentMethodController;
+use App\Http\Controllers\StripePaymentController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Middleware\ApiTokenAuth;
 use Illuminate\Http\Request;
 
@@ -25,14 +31,60 @@ Route::post('/register', [AuthController::class, 'register']);
 // Public registration for instructors
 Route::post('/register-instructor', [AuthController::class, 'registerInstructor']);
 
+// Debug endpoint - remove after fixing
+Route::post('/debug-note', function(Request $request) {
+    return response()->json([
+        'all_data' => $request->all(),
+        'has_file' => $request->hasFile('attachment'),
+        'has_key' => $request->has('attachment'),
+        'files' => $request->allFiles(),
+        'headers' => $request->headers->all(),
+    ]);
+});
+
 // Public course routes
 Route::get('/courses', [CourseController::class, 'index']);
 Route::get('/courses/{id}', [CourseController::class, 'show']);
+
+// Stripe webhook (no authentication required)
+Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handleWebhook']);
 
 // Protected routes using middleware class directly (no Kernel registration required)
 Route::middleware([ApiTokenAuth::class])->group(function () {
 	Route::get('/me', [AuthController::class, 'me']);
 	Route::post('/logout', [AuthController::class, 'logout']);
+	
+	// Enrollment routes
+	Route::get('/enrollments', [EnrollmentController::class, 'index']);
+	Route::post('/enrollments', [EnrollmentController::class, 'store']);
+	Route::get('/enrollments/{id}', [EnrollmentController::class, 'show']);
+	Route::put('/enrollments/{id}/progress', [EnrollmentController::class, 'updateProgress']);
+	Route::delete('/enrollments/{id}', [EnrollmentController::class, 'destroy']);
+	Route::get('/courses/{courseId}/enrollment-status', [EnrollmentController::class, 'checkEnrollmentStatus']);
+	
+	// Payment routes
+	Route::post('/payments/create-intent', [PaymentController::class, 'createIntent']);
+	Route::post('/payments/confirm', [PaymentController::class, 'confirmPayment']);
+	Route::get('/payments/history', [PaymentController::class, 'history']);
+	Route::get('/enrollments/{enrollmentId}/payment', [PaymentController::class, 'getEnrollmentPayment']);
+	Route::post('/payments/refund', [PaymentController::class, 'requestRefund']);
+	Route::get('/payments/{paymentId}/receipt', [PaymentController::class, 'downloadReceipt']);
+	
+	// Coupon routes
+	Route::post('/coupons/validate', [CouponController::class, 'validate']);
+	Route::post('/coupons/apply', [CouponController::class, 'apply']);
+	
+	// Payment method routes
+	Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
+	Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
+	Route::delete('/payment-methods/{id}', [PaymentMethodController::class, 'destroy']);
+	Route::put('/payment-methods/{id}/set-default', [PaymentMethodController::class, 'setDefault']);
+	
+	// Stripe payment routes
+	Route::get('/stripe/enrollment-status/{courseId}', [StripePaymentController::class, 'checkEnrollmentStatus']);
+	Route::post('/stripe/create-payment-intent', [StripePaymentController::class, 'createPaymentIntent']);
+	Route::post('/stripe/confirm-enrollment', [StripePaymentController::class, 'confirmEnrollment']);
+	Route::get('/stripe/payment-status/{paymentIntentId}', [StripePaymentController::class, 'getPaymentStatus']);
 	
 	// Instructor course management routes
 	Route::prefix('instructor')->group(function () {
@@ -70,6 +122,10 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
 		Route::get('/dashboard', [\App\Http\Controllers\LearnerDashboardController::class, 'index']);
 		Route::get('/stats', [\App\Http\Controllers\LearnerDashboardController::class, 'stats']);
 		Route::get('/activity', [\App\Http\Controllers\LearnerDashboardController::class, 'activity']);
+		Route::get('/streak', [\App\Http\Controllers\LearnerDashboardController::class, 'streak']);
+		Route::get('/recommendations', [\App\Http\Controllers\LearnerDashboardController::class, 'recommendations']);
+		Route::get('/performance', [\App\Http\Controllers\LearnerDashboardController::class, 'performance']);
+		Route::get('/certificates', [\App\Http\Controllers\LearnerDashboardController::class, 'certificates']);
 		
 		// Profile
 		Route::get('/profile', [\App\Http\Controllers\LearnerProfileController::class, 'show']);

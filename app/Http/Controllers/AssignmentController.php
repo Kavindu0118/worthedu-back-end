@@ -42,9 +42,34 @@ class AssignmentController extends Controller
             $data = $request->validate([
                 'assignment_title' => 'required|string|max:255',
                 'instructions' => 'nullable|string',
+                'submission_type' => 'nullable|in:file,text,both',
                 'attachment' => 'nullable|file|max:10240', // 10MB max
-                'max_points' => 'nullable|integer',
+                'max_points' => 'nullable|integer|min:0',
                 'due_date' => 'nullable|date',
+                
+                // File upload restrictions
+                'allowed_file_types' => 'nullable|string', // Comma-separated: pdf,doc,docx
+                'max_file_size_mb' => 'nullable|integer|min:1|max:100',
+                'max_files' => 'nullable|integer|min:1|max:10',
+                
+                // Late submission policy
+                'allow_late_submission' => 'nullable|boolean',
+                'late_submission_deadline' => 'nullable|date|after:due_date',
+                'late_penalty_percent' => 'nullable|numeric|min:0|max:100',
+                
+                // Grading settings
+                'require_rubric' => 'nullable|boolean',
+                'peer_review_enabled' => 'nullable|boolean',
+                'peer_reviews_required' => 'nullable|integer|min:1',
+                'grading_criteria' => 'nullable|string',
+                
+                // Availability settings
+                'available_from' => 'nullable|date',
+                'show_after_due_date' => 'nullable|boolean',
+                
+                // Text submission settings
+                'min_words' => 'nullable|integer|min:0',
+                'max_words' => 'nullable|integer|min:1',
             ]);
 
             \Log::info('Assignment validation passed', ['data' => $data]);
@@ -60,9 +85,34 @@ class AssignmentController extends Controller
                 'module_id' => $moduleId,
                 'assignment_title' => $data['assignment_title'],
                 'instructions' => $data['instructions'] ?? null,
+                'submission_type' => $data['submission_type'] ?? 'file',
                 'attachment_url' => $attachmentUrl,
                 'max_points' => $data['max_points'] ?? 100,
                 'due_date' => $data['due_date'] ?? null,
+                
+                // File restrictions
+                'allowed_file_types' => $data['allowed_file_types'] ?? null,
+                'max_file_size_mb' => $data['max_file_size_mb'] ?? 10,
+                'max_files' => $data['max_files'] ?? 1,
+                
+                // Late submission
+                'allow_late_submission' => $data['allow_late_submission'] ?? false,
+                'late_submission_deadline' => $data['late_submission_deadline'] ?? null,
+                'late_penalty_percent' => $data['late_penalty_percent'] ?? 0,
+                
+                // Grading
+                'require_rubric' => $data['require_rubric'] ?? false,
+                'peer_review_enabled' => $data['peer_review_enabled'] ?? false,
+                'peer_reviews_required' => $data['peer_reviews_required'] ?? null,
+                'grading_criteria' => $data['grading_criteria'] ?? null,
+                
+                // Availability
+                'available_from' => $data['available_from'] ?? null,
+                'show_after_due_date' => $data['show_after_due_date'] ?? true,
+                
+                // Text settings
+                'min_words' => $data['min_words'] ?? null,
+                'max_words' => $data['max_words'] ?? null,
             ]);
 
             \Log::info('Assignment created', ['assignment_id' => $assignment->id]);
@@ -112,9 +162,34 @@ class AssignmentController extends Controller
         $data = $request->validate([
             'assignment_title' => 'sometimes|string|max:255',
             'instructions' => 'nullable|string',
+            'submission_type' => 'nullable|in:file,text,both',
             'attachment' => 'nullable|file|max:10240',
-            'max_points' => 'sometimes|integer',
+            'max_points' => 'sometimes|integer|min:0',
             'due_date' => 'nullable|date',
+            
+            // File upload restrictions
+            'allowed_file_types' => 'nullable|string',
+            'max_file_size_mb' => 'nullable|integer|min:1|max:100',
+            'max_files' => 'nullable|integer|min:1|max:10',
+            
+            // Late submission policy
+            'allow_late_submission' => 'nullable|boolean',
+            'late_submission_deadline' => 'nullable|date|after:due_date',
+            'late_penalty_percent' => 'nullable|numeric|min:0|max:100',
+            
+            // Grading settings
+            'require_rubric' => 'nullable|boolean',
+            'peer_review_enabled' => 'nullable|boolean',
+            'peer_reviews_required' => 'nullable|integer|min:1',
+            'grading_criteria' => 'nullable|string',
+            
+            // Availability settings
+            'available_from' => 'nullable|date',
+            'show_after_due_date' => 'nullable|boolean',
+            
+            // Text submission settings
+            'min_words' => 'nullable|integer|min:0',
+            'max_words' => 'nullable|integer|min:1',
         ]);
 
         // Handle file upload

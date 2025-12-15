@@ -37,6 +37,11 @@ class CourseModule extends Model
         return $this->hasMany(ModuleNote::class, 'module_id');
     }
 
+    public function lessons()
+    {
+        return $this->hasMany(Lesson::class, 'module_id')->orderBy('order_no');
+    }
+
     public function progress()
     {
         return $this->hasMany(LessonProgress::class, 'lesson_id');

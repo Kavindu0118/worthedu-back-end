@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Learner Notes API</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: 600;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .response h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .success {
+            border-left: 4px solid #4CAF50;
+            background-color: #f1f8f4;
+        }
+        .error {
+            border-left: 4px solid #f44336;
+            background-color: #ffebee;
+        }
+        pre {
+            background-color: #272822;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .note-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .note-card h4 {
+            margin: 0 0 10px 0;
+            color: #2196F3;
+        }
+        .note-card p {
+            margin: 8px 0;
+            color: #666;
+            line-height: 1.6;
+        }
+        .note-attachment {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: #2196F3;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .note-attachment:hover {
+            background-color: #1976D2;
+        }
+        .no-attachment {
+            color: #999;
+            font-style: italic;
+        }
+        .module-info {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .module-info h3 {
+            margin-top: 0;
+            color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Test Learner Notes API</h1>
+        
+        <div class="form-group">
+            <label for="token">API Token:</label>
+            <input type="text" id="token" placeholder="Enter your API token here">
+        </div>
+        
+        <div class="form-group">
+            <label for="moduleId">Module/Lesson ID:</label>
+            <input type="number" id="moduleId" value="2" placeholder="Enter module ID">
+        </div>
+        
+        <button onclick="testLessonAPI()">Test Lesson API (with Notes)</button>
+        <button onclick="testCourseAPI()" style="background-color: #2196F3; margin-left: 10px;">Test Course API (with Notes)</button>
+        
+        <div id="response"></div>
+    </div>
+
+    <script>
+        async function testLessonAPI() {
+            const token = document.getElementById('token').value;
+            const moduleId = document.getElementById('moduleId').value;
+            const responseDiv = document.getElementById('response');
+            
+            if (!token) {
+                responseDiv.innerHTML = `
+                    <div class="response error">
+                        <h3>❌ Error</h3>
+                        <p>Please enter an API token</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            responseDiv.innerHTML = '<div class="response"><h3>Loading...</h3></div>';
+            
+            try {
+                const response = await fetch(`http://localhost:8000/api/learner/lessons/${moduleId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    const module = data.data;
+                    const notes = module.notes || [];
+                    
+                    let notesHTML = '';
+                    if (notes.length > 0) {
+                        notesHTML = notes.map(note => `
+                            <div class="note-card">
+                                <h4>📝 ${note.title}</h4>
+                                <p>${note.body}</p>
+                                ${note.attachment_url ? 
+                                    `<a href="${note.attachment_url}" class="note-attachment" target="_blank">
+                                        📎 Download ${note.attachment_name || 'Attachment'}
+                                    </a>` : 
+                                    '<span class="no-attachment">No attachment</span>'
+                                }
+                                <p style="font-size: 12px; color: #999; margin-top: 10px;">
+                                    Created: ${new Date(note.created_at).toLocaleString()}
+                                </p>
+                            </div>
+                        `).join('');
+                    } else {
+                        notesHTML = '<p class="no-attachment">No notes available for this lesson</p>';
+                    }
+                    
+                    responseDiv.innerHTML = `
+                        <div class="response success">
+                            <h3>✅ Success - Lesson Details</h3>
+                            
+                            <div class="module-info">
+                                <h3>${module.title}</h3>
+                                <p><strong>Course:</strong> ${module.course_title}</p>
+                                <p><strong>Duration:</strong> ${module.duration || 'Not specified'}</p>
+                                <p><strong>Order:</strong> ${module.order_index}</p>
+                            </div>
+                            
+                            <h3>📚 Notes (${notes.length})</h3>
+                            ${notesHTML}
+                            
+                            <h3>Raw JSON Response:</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    responseDiv.innerHTML = `
+                        <div class="response error">
+                            <h3>❌ Error</h3>
+                            <p>${data.message || 'Request failed'}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <div class="response error">
+                        <h3>❌ Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testCourseAPI() {
+            const token = document.getElementById('token').value;
+            const courseId = 2; // Fixed course ID
+            const responseDiv = document.getElementById('response');
+            
+            if (!token) {
+                responseDiv.innerHTML = `
+                    <div class="response error">
+                        <h3>❌ Error</h3>
+                        <p>Please enter an API token</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            responseDiv.innerHTML = '<div class="response"><h3>Loading...</h3></div>';
+            
+            try {
+                const response = await fetch(`http://localhost:8000/api/learner/courses/${courseId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    const course = data.data;
+                    const modules = course.modules || [];
+                    
+                    let modulesHTML = modules.map(module => {
+                        const notes = module.notes || [];
+                        const notesHTML = notes.length > 0 ? notes.map(note => `
+                            <div class="note-card">
+                                <h4>📝 ${note.title}</h4>
+                                <p>${note.body}</p>
+                                ${note.attachment_url ? 
+                                    `<a href="${note.attachment_url}" class="note-attachment" target="_blank">
+                                        📎 ${note.attachment_name || 'Download'}
+                                    </a>` : 
+                                    '<span class="no-attachment">No attachment</span>'
+                                }
+                            </div>
+                        `).join('') : '<p class="no-attachment">No notes</p>';
+                        
+                        return `
+                            <div class="module-info" style="margin-bottom: 20px;">
+                                <h3>📖 ${module.title}</h3>
+                                <p>${module.description || ''}</p>
+                                <p><strong>Lessons:</strong> ${module.lessons.length}</p>
+                                <h4>Notes (${notes.length}):</h4>
+                                ${notesHTML}
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    responseDiv.innerHTML = `
+                        <div class="response success">
+                            <h3>✅ Success - Course Details</h3>
+                            
+                            <div class="module-info">
+                                <h3>${course.title}</h3>
+                                <p>${course.description || ''}</p>
+                                <p><strong>Level:</strong> ${course.level}</p>
+                                <p><strong>Category:</strong> ${course.category}</p>
+                                <p><strong>Progress:</strong> ${course.completedLessons}/${course.totalLessons} lessons</p>
+                            </div>
+                            
+                            <h3>📚 Modules with Notes</h3>
+                            ${modulesHTML}
+                            
+                            <h3>Raw JSON Response:</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    responseDiv.innerHTML = `
+                        <div class="response error">
+                            <h3>❌ Error</h3>
+                            <p>${data.message || 'Request failed'}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <div class="response error">
+                        <h3>❌ Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Quiz Start</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        input {
+            padding: 8px;
+            width: 300px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Quiz Start API</h1>
+    
+    <div>
+        <label>API Token:</label><br>
+        <input type="text" id="token" value="N7udajf94BusCPoVNGIaV09BtRphYjuHRCkmwIbCtZwi6VsXnKo6qjPvIUID" style="width: 500px;">
+    </div>
+    
+    <div>
+        <label>Quiz ID:</label><br>
+        <input type="number" id="quizId" value="5">
+    </div>
+    
+    <button onclick="startQuiz()">Start Quiz</button>
+    
+    <div id="result"></div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api';
+
+        async function startQuiz() {
+            const token = document.getElementById('token').value;
+            const quizId = document.getElementById('quizId').value;
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                resultDiv.innerHTML = '<p>Starting quiz...</p>';
+                
+                const response = await fetch(`${API_BASE}/learner/quizzes/${quizId}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = '<h3>✅ Success!</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = '<h3>❌ Error</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h3>❌ Network Error</h3><p>' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

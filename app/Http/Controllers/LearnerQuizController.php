@@ -127,13 +127,13 @@ class LearnerQuizController extends Controller
                 ];
             });
         
-        // Check if can attempt
+        // Check if can attempt (only count completed attempts)
         $canAttempt = true;
         $remainingAttempts = null;
         
         if ($quiz->max_attempts) {
-            $attemptCount = $attempts->count();
-            $remainingAttempts = $quiz->max_attempts - $attemptCount;
+            $completedAttemptCount = $attempts->where('status', 'completed')->count();
+            $remainingAttempts = $quiz->max_attempts - $completedAttemptCount;
             $canAttempt = $remainingAttempts > 0;
         }
         
@@ -191,13 +191,14 @@ class LearnerQuizController extends Controller
             ], 403);
         }
         
-        // Check max attempts
+        // Check max attempts (only count completed attempts)
         if ($quiz->max_attempts) {
-            $attemptCount = QuizAttempt::where('quiz_id', $id)
+            $completedAttemptCount = QuizAttempt::where('quiz_id', $id)
                 ->where('user_id', $user->id)
+                ->where('status', 'completed')
                 ->count();
             
-            if ($attemptCount >= $quiz->max_attempts) {
+            if ($completedAttemptCount >= $quiz->max_attempts) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Maximum attempts reached for this quiz',
@@ -220,10 +221,21 @@ class LearnerQuizController extends Controller
             ], 400);
         }
         
-        // Create attempt
+        // Auto-abandon any old in-progress attempts for this user and quiz
+        QuizAttempt::where('quiz_id', $id)
+            ->where('user_id', $user->id)
+            ->where('status', 'in_progress')
+            ->update(['status' => 'abandoned']);
+        
+        // Create attempt (attempt number based on completed attempts)
         $attemptNumber = QuizAttempt::where('quiz_id', $id)
             ->where('user_id', $user->id)
+            ->where('status', 'completed')
             ->count() + 1;
+        
+        $expiresAt = $quiz->time_limit_minutes 
+            ? now()->addMinutes($quiz->time_limit_minutes) 
+            : null;
         
         $attempt = QuizAttempt::create([
             'quiz_id' => $id,
@@ -231,8 +243,27 @@ class LearnerQuizController extends Controller
             'attempt_number' => $attemptNumber,
             'started_at' => now(),
             'status' => 'in_progress',
-            'total_points' => $quiz->total_marks,
+            'total_points' => $quiz->total_points ?? 0,
         ]);
+        
+        // Format questions from quiz_data
+        $questions = [];
+        if ($quiz->quiz_data && is_array($quiz->quiz_data)) {
+            foreach ($quiz->quiz_data as $index => $questionData) {
+                $questions[] = [
+                    'id' => $index + 1,
+                    'question_text' => $questionData['question'] ?? '',
+                    'question_type' => 'multiple_choice',
+                    'points' => $questionData['points'] ?? 10,
+                    'options' => array_map(function($option, $idx) {
+                        return [
+                            'id' => $idx + 1,
+                            'option_text' => $option
+                        ];
+                    }, $questionData['options'] ?? [], array_keys($questionData['options'] ?? []))
+                ];
+            }
+        }
         
         return response()->json([
             'success' => true,
@@ -240,9 +271,14 @@ class LearnerQuizController extends Controller
             'data' => [
                 'attempt_id' => $attempt->id,
                 'quiz_id' => $quiz->id,
+                'quiz_title' => $quiz->title,
                 'attempt_number' => $attemptNumber,
                 'started_at' => $attempt->started_at->toISOString(),
+                'expires_at' => $expiresAt ? $expiresAt->toISOString() : null,
                 'time_limit_minutes' => $quiz->time_limit_minutes,
+                'total_points' => $quiz->total_points ?? 0,
+                'passing_percentage' => $quiz->passing_percentage ?? 70,
+                'questions' => $questions,
             ],
         ]);
     }
@@ -255,16 +291,23 @@ class LearnerQuizController extends Controller
         $user = Auth::user();
         
         $validator = Validator::make($request->all(), [
-            'question_id' => 'required|exists:quiz_question_options,id',
-            'selected_option_ids' => 'required|array',
-            'selected_option_ids.*' => 'exists:quiz_question_options,id',
+            'question_id' => 'required|integer',
+            'answer' => 'required|string',
         ]);
         
         if ($validator->fails()) {
+            \Log::error('Quiz answer validation failed', [
+                'attempt_id' => $attemptId,
+                'user_id' => $user->id,
+                'request_data' => $request->all(),
+                'errors' => $validator->errors()->toArray(),
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Validation error',
                 'errors' => $validator->errors(),
+                'received_data' => $request->all(),
             ], 422);
         }
         
@@ -292,23 +335,26 @@ class LearnerQuizController extends Controller
             }
         }
         
-        // Save answer
-        $answer = QuizAnswer::updateOrCreate(
-            [
-                'attempt_id' => $attemptId,
-                'question_id' => $request->question_id,
-            ],
-            [
-                'selected_option_ids' => json_encode($request->selected_option_ids),
-            ]
-        );
+        // Get existing answers or create new array
+        $answers = $attempt->answers ?? [];
+        
+        // Save/update answer (use string key for consistency)
+        $answers[(string)$request->question_id] = $request->answer;
+        $attempt->update(['answers' => $answers]);
+        
+        \Log::info('Answer saved', [
+            'attempt_id' => $attemptId,
+            'question_id' => $request->question_id,
+            'answer' => $request->answer,
+            'all_answers' => $answers,
+        ]);
         
         return response()->json([
             'success' => true,
-            'message' => 'Answer saved',
+            'message' => 'Answer recorded successfully',
             'data' => [
                 'question_id' => $request->question_id,
-                'answer_id' => $answer->id,
+                'answer' => $request->answer,
             ],
         ]);
     }
@@ -336,39 +382,89 @@ class LearnerQuizController extends Controller
         // Calculate time taken
         $timeTaken = $attempt->started_at->diffInMinutes(now());
         
-        // TODO: Calculate score based on correct answers
-        // For now, set placeholder values
-        $score = 0;
-        $pointsEarned = 0;
+        // Calculate score
+        $userAnswers = $attempt->answers ?? [];
+        $quizData = $quiz->quiz_data ?? [];
+        
+        \Log::info('Quiz submission - grading', [
+            'attempt_id' => $attemptId,
+            'user_id' => $user->id,
+            'user_answers' => $userAnswers,
+            'quiz_data_count' => count($quizData),
+        ]);
+        
+        $totalPoints = 0;
+        $earnedPoints = 0;
+        $results = [];
+        
+        foreach ($quizData as $index => $question) {
+            $questionId = $index + 1;
+            $points = $question['points'] ?? 10;
+            $correctAnswer = $question['correct_answer'] ?? '';
+            // Use string key to match how we store answers
+            $userAnswer = $userAnswers[(string)$questionId] ?? '';
+            
+            $totalPoints += $points;
+            $isCorrect = strcasecmp(trim($userAnswer), trim($correctAnswer)) === 0;
+            
+            \Log::info('Grading question', [
+                'question_id' => $questionId,
+                'user_answer' => $userAnswer,
+                'correct_answer' => $correctAnswer,
+                'is_correct' => $isCorrect,
+            ]);
+            
+            if ($isCorrect) {
+                $earnedPoints += $points;
+            }
+            
+            $results[] = [
+                'question_id' => $questionId,
+                'question_text' => $question['question'] ?? '',
+                'user_answer' => $userAnswer,
+                'correct_answer' => $quiz->show_correct_answers ? $correctAnswer : null,
+                'is_correct' => $isCorrect,
+                'points_earned' => $isCorrect ? $points : 0,
+                'points_possible' => $points,
+            ];
+        }
+        
+        // Calculate percentage score
+        $score = $totalPoints > 0 ? ($earnedPoints / $totalPoints) * 100 : 0;
         
         // Determine if passed
-        $passingPercentage = $quiz->passing_percentage ?? 60;
+        $passingPercentage = $quiz->passing_percentage ?? 70;
         $passed = $score >= $passingPercentage;
         
         // Update attempt
         $attempt->update([
             'completed_at' => now(),
             'time_taken_minutes' => $timeTaken,
-            'score' => $score,
-            'points_earned' => $pointsEarned,
+            'score' => round($score, 2),
+            'points_earned' => $earnedPoints,
+            'total_points' => $totalPoints,
             'status' => 'completed',
             'passed' => $passed,
         ]);
         
-        // Log quiz completion activity
+        // Log quiz activity
         ActivityLogger::logActivity($user->id, 'quiz', $timeTaken);
         
         return response()->json([
             'success' => true,
-            'message' => 'Quiz submitted successfully',
+            'message' => $passed ? 'Congratulations! You passed the quiz.' : 'Quiz completed. You did not meet the passing score.',
             'data' => [
                 'attempt_id' => $attempt->id,
-                'score' => $score,
-                'points_earned' => $pointsEarned,
-                'total_points' => $attempt->total_points,
+                'score' => round($score, 2),
+                'points_earned' => $earnedPoints,
+                'total_points' => $totalPoints,
                 'time_taken_minutes' => $timeTaken,
                 'passed' => $passed,
                 'passing_percentage' => $passingPercentage,
+                'feedback' => $passed 
+                    ? 'Great job! You scored ' . round($score, 2) . '%' 
+                    : 'You scored ' . round($score, 2) . '%. You need ' . $passingPercentage . '% to pass.',
+                'answers' => $results,
             ],
         ]);
     }

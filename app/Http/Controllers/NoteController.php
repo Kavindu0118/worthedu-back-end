@@ -8,6 +8,7 @@ use App\Http\Resources\ModuleNoteResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 class NoteController extends Controller
 {
@@ -26,20 +27,77 @@ class NoteController extends Controller
         }
 
         $instructor = $user->instructor;
-        if ($course->instructor_id !== $instructor->instructor_id) {
+        if (!$instructor || $course->instructor_id !== $instructor->instructor_id) {
             return response()->json(['message' => 'You can only add notes to your own courses'], 403);
         }
 
-        $data = $request->validate([
-            'note_title' => 'required|string|max:255',
-            'note_body' => 'required|string',
-            'attachment' => 'nullable|file|max:10240', // 10MB max
+        // Log request for debugging
+        \Log::info('=== Note Store Request ===', [
+            'moduleId' => $moduleId,
+            'note_title' => $request->input('note_title'),
+            'note_body' => $request->input('note_body'),
+            'has_attachment' => $request->hasFile('attachment'),
+            'attachment_in_request' => $request->has('attachment'),
+            'file_size' => $request->hasFile('attachment') ? $request->file('attachment')->getSize() : null,
+            'file_mime' => $request->hasFile('attachment') ? $request->file('attachment')->getMimeType() : null,
+            'all_keys' => array_keys($request->all()),
         ]);
 
-        $attachmentUrl = null;
+        // Only validate attachment if it exists
+        $rules = [
+            'note_title' => 'required|string|max:255',
+            'note_body' => 'required|string',
+        ];
+
+        // Only add attachment validation if file is actually present
         if ($request->hasFile('attachment')) {
-            $path = $request->file('attachment')->store('course-attachments', 'public');
+            $rules['attachment'] = 'file|max:102400|mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,mp4,mov,avi,mkv,webm,zip,rar';
+        }
+
+        $validator = Validator::make($request->all(), $rules, [
+            'attachment.max' => 'The file must not be larger than 100MB.',
+            'attachment.mimes' => 'The file must be one of: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, MP4, MOV, AVI, MKV, WEBM, ZIP, RAR.',
+        ]);
+
+        if ($validator->fails()) {
+            \Log::warning('Note validation failed', [
+                'errors' => $validator->errors()->toArray(),
+            ]);
+            return response()->json([
+                'message' => 'Validation error',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
+        $attachmentUrl = null;
+        $attachmentType = null;
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            
+            // Validate file uploaded successfully
+            if (!$file->isValid()) {
+                \Log::error('File upload failed', [
+                    'error' => $file->getErrorMessage(),
+                    'error_code' => $file->getError(),
+                ]);
+                return response()->json([
+                    'message' => 'File upload failed',
+                    'errors' => ['attachment' => ['The file failed to upload. Please try again.']]
+                ], 422);
+            }
+            
+            $extension = $file->getClientOriginalExtension();
+            $filename = time() . '_' . uniqid() . '.' . $extension;
+            $path = $file->storeAs('course-attachments', $filename, 'public');
             $attachmentUrl = asset('storage/' . $path);
+            $attachmentType = $file->getMimeType();
+            
+            \Log::info('File uploaded successfully', [
+                'path' => $path,
+                'url' => $attachmentUrl,
+            ]);
         }
 
         $note = ModuleNote::create([
@@ -70,14 +128,14 @@ class NoteController extends Controller
         }
 
         $instructor = $user->instructor;
-        if ($course->instructor_id !== $instructor->instructor_id) {
+        if (!$instructor || $course->instructor_id !== $instructor->instructor_id) {
             return response()->json(['message' => 'You can only update your own notes'], 403);
         }
 
         $data = $request->validate([
             'note_title' => 'sometimes|string|max:255',
             'note_body' => 'sometimes|string',
-            'attachment' => 'nullable|file|max:10240',
+            'attachment' => 'nullable|file|max:102400|mimes:pdf,doc,docx,ppt,pptx,xls,xlsx,mp4,mov,avi,mkv,webm,zip,rar', // 100MB max
         ]);
 
         // Handle file upload
@@ -88,7 +146,10 @@ class NoteController extends Controller
                 Storage::disk('public')->delete($oldPath);
             }
 
-            $path = $request->file('attachment')->store('course-attachments', 'public');
+            $file = $request->file('attachment');
+            $extension = $file->getClientOriginalExtension();
+            $filename = time() . '_' . uniqid() . '.' . $extension;
+            $path = $file->storeAs('course-attachments', $filename, 'public');
             $data['attachment_url'] = asset('storage/' . $path);
         }
 
@@ -115,7 +176,7 @@ class NoteController extends Controller
         }
 
         $instructor = $user->instructor;
-        if ($course->instructor_id !== $instructor->instructor_id) {
+        if (!$instructor || $course->instructor_id !== $instructor->instructor_id) {
             return response()->json(['message' => 'You can only delete your own notes'], 403);
         }
 

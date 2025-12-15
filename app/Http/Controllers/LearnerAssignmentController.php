@@ -65,6 +65,7 @@ class LearnerAssignmentController extends Controller
                     'max_marks' => $assignment->max_marks,
                     'allow_late_submission' => $assignment->allow_late_submission ?? false,
                     'status' => $assignmentStatus,
+                    'submit_url' => url('/api/learner/assignments/' . $assignment->id . '/submit'),
                     'submission' => $submission ? [
                         'id' => $submission->id,
                         'submitted_at' => $submission->submitted_at->toISOString(),
@@ -124,6 +125,7 @@ class LearnerAssignmentController extends Controller
                 'late_penalty_percent' => $assignment->late_penalty_percent ?? 0,
                 'max_file_size_mb' => $assignment->max_file_size_mb ?? 10,
                 'allowed_file_types' => $assignment->allowed_file_types,
+                    'submit_url' => url('/api/learner/assignments/' . $assignment->id . '/submit'),
                 'submission' => $submission ? [
                     'id' => $submission->id,
                     'submission_text' => $submission->submission_text,

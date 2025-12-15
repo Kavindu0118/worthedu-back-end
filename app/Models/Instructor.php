@@ -11,7 +11,10 @@ class Instructor extends Model
 
     // Optional: If your table name is 'instructors' (Laravel's default plural convention), 
     // you don't need to define $table. If it's different (e.g., 'teachers'), uncomment and adjust.
-    // protected $table = 'instructors'; 
+    // protected $table = 'instructors';
+    
+    // Specify the primary key column name
+    protected $primaryKey = 'instructor_id';
 
     // The columns that are mass assignable (used in the create method in AuthController)
     protected $fillable = [

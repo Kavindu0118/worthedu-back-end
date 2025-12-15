@@ -6,6 +6,7 @@ use App\Models\Course;
 use App\Models\Enrollment;
 use App\Models\LessonProgress;
 use App\Models\CourseModule;
+use App\Models\Lesson;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,7 @@ class LearnerCourseController extends Controller
         $query = Enrollment::where('learner_id', $user->id)
             ->with(['course' => function($q) {
                 $q->select('id', 'title', 'description', 'thumbnail', 'category', 'level', 'duration', 'instructor_id')
-                  ->with('instructor:id,name,email');
+                  ->with(['instructor.user:id,name,email']);
             }]);
         
         if ($status) {
@@ -44,9 +45,9 @@ class LearnerCourseController extends Controller
                 'category' => $course->category,
                 'level' => $course->level,
                 'duration' => $course->duration,
-                'instructor' => $course->instructor ? [
-                    'id' => $course->instructor->id,
-                    'name' => $course->instructor->name,
+                'instructor' => $course->instructor && $course->instructor->user ? [
+                    'id' => $course->instructor->user->id,
+                    'name' => $course->instructor->user->name,
                 ] : null,
                 'enrollment' => [
                     'id' => $enrollment->id,
@@ -82,7 +83,7 @@ class LearnerCourseController extends Controller
         
         $query = Course::whereNotIn('id', $enrolledCourseIds)
             ->where('status', 'published')
-            ->with('instructor:id,name,email');
+            ->with(['instructor.user:id,name,email']);
         
         if ($category) {
             $query->where('category', $category);
@@ -111,9 +112,9 @@ class LearnerCourseController extends Controller
                                 'level' => $course->level,
                                 'duration' => $course->duration,
                                 'student_count' => $course->student_count ?? 0,
-                                'instructor' => $course->instructor ? [
-                                    'id' => $course->instructor->id,
-                                    'name' => $course->instructor->name,
+                                'instructor' => $course->instructor && $course->instructor->user ? [
+                                    'id' => $course->instructor->user->id,
+                                    'name' => $course->instructor->user->name,
                                 ] : null,
                             ];
                         });
@@ -131,38 +132,78 @@ class LearnerCourseController extends Controller
     {
         $user = Auth::user();
         
-        $course = Course::with([
-            'instructor:id,name,email,bio',
-            'modules' => function($q) {
-                $q->orderBy('order_index');
-            }
-        ])->findOrFail($id);
-        
-        // Get enrollment if exists
+        // Check if user is enrolled in this course
         $enrollment = Enrollment::where('learner_id', $user->id)
             ->where('course_id', $id)
             ->first();
         
-        // Get progress for each module
-        $modules = $course->modules->map(function ($module) use ($user) {
-            $progress = LessonProgress::where('user_id', $user->id)
-                ->where('lesson_id', $module->id)
-                ->first();
-            
+        if (!$enrollment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not enrolled in this course',
+            ], 403);
+        }
+        
+        // Load course with all nested relationships
+        $course = Course::with([
+            'instructor.user:id,name,email',
+            'courseModules' => function($q) use ($user) {
+                $q->orderBy('order_index')
+                  ->with(['notes', 'quizzes', 'assignments']);
+            }
+        ])->findOrFail($id);
+        
+        // Update last accessed timestamp
+        $enrollment->update(['last_accessed_at' => now()]);
+        
+        // Calculate total and completed lessons (notes are lessons)
+        $totalLessons = 0;
+        $completedLessons = 0;
+        
+        foreach ($course->courseModules as $module) {
+            $totalLessons += $module->notes->count();
+            // TODO: Track note completion status in future
+        }
+        
+        // Map modules with notes (lessons), quizzes, and assignments
+        $modules = $course->courseModules->map(function ($module) use ($user) {
             return [
                 'id' => $module->id,
                 'title' => $module->module_title,
                 'description' => $module->module_description,
-                'type' => $module->type ?? 'reading',
+                'order' => $module->order_index,
                 'duration' => $module->duration,
-                'duration_minutes' => $module->duration_minutes,
-                'order_index' => $module->order_index,
-                'is_mandatory' => $module->is_mandatory ?? true,
-                'progress' => $progress ? [
-                    'status' => $progress->status,
-                    'completed_at' => $progress->completed_at ? $progress->completed_at->toISOString() : null,
-                    'time_spent_minutes' => $progress->time_spent_minutes,
-                ] : null,
+                'notes' => $module->notes->map(function ($note) {
+                    return [
+                        'id' => $note->id,
+                        'title' => $note->note_title,
+                        'body' => $note->note_body,
+                        'attachment_url' => $note->full_attachment_url,
+                        'attachment_name' => $note->attachment_name,
+                        'created_at' => $note->created_at->toISOString(),
+                    ];
+                }),
+                'quizzes' => $module->quizzes->map(function ($quiz) {
+                    return [
+                        'id' => $quiz->id,
+                        'title' => $quiz->quiz_title,
+                        'description' => $quiz->quiz_description,
+                        'duration' => $quiz->time_limit,
+                        'total_marks' => $quiz->total_points,
+                        'passing_percentage' => $quiz->passing_percentage,
+                        'created_at' => $quiz->created_at->toISOString(),
+                    ];
+                }),
+                'assignments' => $module->assignments->map(function ($assignment) {
+                    return [
+                        'id' => $assignment->id,
+                        'title' => $assignment->assignment_title,
+                        'description' => $assignment->instructions,
+                        'deadline' => $assignment->due_date ? $assignment->due_date->toISOString() : null,
+                        'max_marks' => $assignment->max_points,
+                        'created_at' => $assignment->created_at->toISOString(),
+                    ];
+                }),
             ];
         });
         
@@ -177,21 +218,22 @@ class LearnerCourseController extends Controller
                 'level' => $course->level,
                 'duration' => $course->duration,
                 'student_count' => $course->student_count ?? 0,
-                'instructor' => $course->instructor ? [
-                    'id' => $course->instructor->id,
-                    'name' => $course->instructor->name,
-                    'email' => $course->instructor->email,
-                    'bio' => $course->instructor->bio,
+                'instructor' => $course->instructor && $course->instructor->user ? [
+                    'id' => $course->instructor->user->id,
+                    'name' => $course->instructor->user->name,
+                    'email' => $course->instructor->user->email,
                 ] : null,
                 'modules' => $modules,
-                'enrollment' => $enrollment ? [
+                'totalLessons' => $totalLessons,
+                'completedLessons' => $completedLessons,
+                'enrollment' => [
                     'id' => $enrollment->id,
                     'status' => $enrollment->status,
                     'progress' => (float) $enrollment->progress,
                     'enrolled_at' => $enrollment->created_at->toISOString(),
                     'last_accessed' => $enrollment->last_accessed_at ? $enrollment->last_accessed_at->toISOString() : null,
                     'completed_at' => $enrollment->completed_at ? $enrollment->completed_at->toISOString() : null,
-                ] : null,
+                ],
             ],
         ]);
     }

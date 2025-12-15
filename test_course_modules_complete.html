@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Course API with Quizzes & Assignments</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: 600;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .success {
+            border-left: 4px solid #4CAF50;
+            background-color: #f1f8f4;
+        }
+        .error {
+            border-left: 4px solid #f44336;
+            background-color: #ffebee;
+        }
+        .module-card {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .module-card h3 {
+            margin: 0 0 10px 0;
+            color: #1976D2;
+        }
+        .content-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+        }
+        .content-section h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f5f5f5;
+            border-left: 3px solid #2196F3;
+            border-radius: 4px;
+        }
+        .item strong {
+            color: #2196F3;
+        }
+        .empty {
+            color: #999;
+            font-style: italic;
+            padding: 10px;
+        }
+        pre {
+            background-color: #272822;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Test Course API - With Quizzes & Assignments</h1>
+        
+        <div class="form-group">
+            <label for="token">API Token:</label>
+            <input type="text" id="token" placeholder="Enter your API token here">
+        </div>
+        
+        <div class="form-group">
+            <label for="courseId">Course ID:</label>
+            <input type="number" id="courseId" value="2" placeholder="Enter course ID">
+        </div>
+        
+        <button onclick="testCourseAPI()">Test Course API</button>
+        
+        <div id="response"></div>
+    </div>
+
+    <script>
+        async function testCourseAPI() {
+            const token = document.getElementById('token').value;
+            const courseId = document.getElementById('courseId').value;
+            const responseDiv = document.getElementById('response');
+            
+            if (!token) {
+                responseDiv.innerHTML = `
+                    <div class="response error">
+                        <h3>❌ Error</h3>
+                        <p>Please enter an API token</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            responseDiv.innerHTML = '<div class="response"><h3>Loading...</h3></div>';
+            
+            try {
+                const response = await fetch(`http://localhost:8000/api/learner/courses/${courseId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    const course = data.data;
+                    const modules = course.modules || [];
+                    
+                    let modulesHTML = modules.map(module => {
+                        const notes = module.notes || [];
+                        const quizzes = module.quizzes || [];
+                        const assignments = module.assignments || [];
+                        
+                        const notesHTML = notes.length > 0 ? notes.map(note => `
+                            <div class="item">
+                                <strong>${note.title}</strong><br>
+                                ${note.body.substring(0, 100)}${note.body.length > 100 ? '...' : ''}<br>
+                                ${note.attachment_url ? `📎 <a href="${note.attachment_url}" target="_blank">${note.attachment_name}</a>` : 'No attachment'}
+                            </div>
+                        `).join('') : '<p class="empty">No lessons yet</p>';
+                        
+                        const quizzesHTML = quizzes.length > 0 ? quizzes.map(quiz => `
+                            <div class="item">
+                                <strong>${quiz.title}</strong><br>
+                                ${quiz.description || 'No description'}<br>
+                                Duration: ${quiz.duration || 'N/A'} | Marks: ${quiz.total_marks} | Pass: ${quiz.passing_marks}
+                            </div>
+                        `).join('') : '<p class="empty">No quizzes yet</p>';
+                        
+                        const assignmentsHTML = assignments.length > 0 ? assignments.map(assignment => `
+                            <div class="item">
+                                <strong>${assignment.title}</strong><br>
+                                ${assignment.description || 'No description'}<br>
+                                Deadline: ${assignment.deadline ? new Date(assignment.deadline).toLocaleDateString() : 'No deadline'} | Max Marks: ${assignment.max_marks}
+                            </div>
+                        `).join('') : '<p class="empty">No assignments yet</p>';
+                        
+                        return `
+                            <div class="module-card">
+                                <h3>📖 Module ${module.order}: ${module.title}</h3>
+                                <p>${module.description || ''}</p>
+                                
+                                <div class="content-section">
+                                    <h4>📝 Lessons (${notes.length})</h4>
+                                    ${notesHTML}
+                                </div>
+                                
+                                <div class="content-section">
+                                    <h4>📊 Quizzes (${quizzes.length})</h4>
+                                    ${quizzesHTML}
+                                </div>
+                                
+                                <div class="content-section">
+                                    <h4>📋 Assignments (${assignments.length})</h4>
+                                    ${assignmentsHTML}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    responseDiv.innerHTML = `
+                        <div class="response success">
+                            <h3>✅ Success - Course Details</h3>
+                            
+                            <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                                <h3 style="margin-top: 0;">${course.title}</h3>
+                                <p>${course.description || ''}</p>
+                                <p><strong>Level:</strong> ${course.level} | <strong>Category:</strong> ${course.category}</p>
+                                <p><strong>Progress:</strong> ${course.completedLessons}/${course.totalLessons} lessons</p>
+                            </div>
+                            
+                            <h3>📚 Modules (${modules.length})</h3>
+                            ${modulesHTML}
+                            
+                            <h3>Raw JSON Response:</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    responseDiv.innerHTML = `
+                        <div class="response error">
+                            <h3>❌ Error</h3>
+                            <p>${data.message || 'Request failed'}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <div class="response error">
+                        <h3>❌ Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

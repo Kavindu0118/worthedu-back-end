@@ -21,6 +21,7 @@ class QuizAttempt extends Model
         'total_points',
         'status',
         'passed',
+        'answers',
     ];
 
     protected $casts = [
@@ -31,6 +32,7 @@ class QuizAttempt extends Model
         'total_points' => 'decimal:2',
         'passed' => 'boolean',
         'time_taken_minutes' => 'integer',
+        'answers' => 'array',
     ];
 
     /**

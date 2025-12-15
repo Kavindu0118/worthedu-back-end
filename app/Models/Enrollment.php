@@ -16,13 +16,13 @@ class Enrollment extends Model
         'progress',
         'completed_at',
         'status',
-        'last_accessed_at',
+        'last_accessed',
     ];
 
     protected $casts = [
         'enrolled_at' => 'datetime',
         'completed_at' => 'datetime',
-        'last_accessed_at' => 'datetime',
+        'last_accessed' => 'datetime',
         'progress' => 'decimal:2',
     ];
 
@@ -39,5 +39,10 @@ class Enrollment extends Model
     public function course()
     {
         return $this->belongsTo(Course::class);
+    }
+
+    public function payment()
+    {
+        return $this->hasOne(Payment::class);
     }
 }
