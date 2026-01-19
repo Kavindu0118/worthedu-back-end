@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Admin API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        h1 { color: #333; }
+        .endpoint {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        input {
+            padding: 8px;
+            width: 300px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Admin API Test</h1>
+    
+    <div style="margin-bottom: 20px;">
+        <label>API Base URL: </label>
+        <input type="text" id="apiUrl" value="http://localhost/learning-lms/public/api" />
+        <label style="margin-left: 10px;">Token: </label>
+        <input type="text" id="apiToken" value="" placeholder="Enter your API token" />
+    </div>
+
+    <div class="endpoint">
+        <h2>Get All Students</h2>
+        <button onclick="testEndpoint('students')">Test GET /api/admin/students</button>
+        <div id="result-students"></div>
+    </div>
+
+    <div class="endpoint">
+        <h2>Get All Instructors</h2>
+        <button onclick="testEndpoint('instructors')">Test GET /api/admin/instructors</button>
+        <div id="result-instructors"></div>
+    </div>
+
+    <div class="endpoint">
+        <h2>Get All Courses</h2>
+        <button onclick="testEndpoint('courses')">Test GET /api/admin/courses</button>
+        <div id="result-courses"></div>
+    </div>
+
+    <script>
+        async function testEndpoint(endpoint) {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const token = document.getElementById('apiToken').value;
+            const resultDiv = document.getElementById(`result-${endpoint}`);
+            
+            resultDiv.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                };
+                
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                const response = await fetch(`${apiUrl}/admin/${endpoint}`, {
+                    method: 'GET',
+                    headers: headers
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✓ Success (${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">✗ Error (${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">✗ Network Error</p>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

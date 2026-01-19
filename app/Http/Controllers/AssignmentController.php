@@ -7,6 +7,7 @@ use App\Models\ModuleAssignment;
 use App\Http\Resources\ModuleAssignmentResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class AssignmentController extends Controller
@@ -17,7 +18,7 @@ class AssignmentController extends Controller
     public function store(Request $request, $moduleId)
     {
         try {
-            \Log::info('=== Assignment Store Request ===', [
+            Log::info('=== Assignment Store Request ===', [
                 'moduleId' => $moduleId,
                 'request_data' => $request->all(),
                 'has_file' => $request->hasFile('attachment'),
@@ -29,13 +30,13 @@ class AssignmentController extends Controller
             // Check ownership
             $user = Auth::user();
             if (!$user || $user->role !== 'instructor') {
-                \Log::warning('Assignment store: Not an instructor');
+                Log::warning('Assignment store: Not an instructor');
                 return response()->json(['message' => 'Only instructors can add assignments'], 403);
             }
 
             $instructor = $user->instructor;
             if ($course->instructor_id !== $instructor->instructor_id) {
-                \Log::warning('Assignment store: Not the course owner');
+                Log::warning('Assignment store: Not the course owner');
                 return response()->json(['message' => 'You can only add assignments to your own courses'], 403);
             }
 
@@ -72,13 +73,13 @@ class AssignmentController extends Controller
                 'max_words' => 'nullable|integer|min:1',
             ]);
 
-            \Log::info('Assignment validation passed', ['data' => $data]);
+            Log::info('Assignment validation passed', ['data' => $data]);
 
             $attachmentUrl = null;
             if ($request->hasFile('attachment')) {
                 $path = $request->file('attachment')->store('course-attachments', 'public');
                 $attachmentUrl = asset('storage/' . $path);
-                \Log::info('Attachment uploaded', ['path' => $path]);
+                Log::info('Attachment uploaded', ['path' => $path]);
             }
 
             $assignment = ModuleAssignment::create([
@@ -115,7 +116,7 @@ class AssignmentController extends Controller
                 'max_words' => $data['max_words'] ?? null,
             ]);
 
-            \Log::info('Assignment created', ['assignment_id' => $assignment->id]);
+            Log::info('Assignment created', ['assignment_id' => $assignment->id]);
 
             return response()->json([
                 'message' => 'Assignment added successfully',
@@ -123,13 +124,13 @@ class AssignmentController extends Controller
             ], 201);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::error('Assignment validation error', ['errors' => $e->errors()]);
+            Log::error('Assignment validation error', ['errors' => $e->errors()]);
             return response()->json([
                 'message' => 'Validation failed',
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
-            \Log::error('Assignment store error', [
+            Log::error('Assignment store error', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);

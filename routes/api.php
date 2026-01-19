@@ -13,16 +13,10 @@ use App\Http\Controllers\CouponController;
 use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\StripePaymentController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\InstructorSubmissionController;
 use App\Http\Middleware\ApiTokenAuth;
 use Illuminate\Http\Request;
-
-// Handle CORS preflight for all API routes
-Route::options('{any}', function (Request $request) {
-    return response('', 200)
-        ->header('Access-Control-Allow-Origin', '*')
-        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-})->where('any', '.*');
 
 // Public login
 Route::post('/login', [AuthController::class, 'login']);
@@ -114,6 +108,13 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
 		Route::post('/modules/{moduleId}/notes', [NoteController::class, 'store']);
 		Route::put('/notes/{id}', [NoteController::class, 'update']);
 		Route::delete('/notes/{id}', [NoteController::class, 'destroy']);
+		
+		// Assignment submission grading
+		Route::get('/assignments/{assignmentId}/submissions', [InstructorSubmissionController::class, 'getAssignmentSubmissions']);
+		Route::get('/submissions/{submissionId}', [InstructorSubmissionController::class, 'getSubmissionDetails']);
+		Route::put('/submissions/{submissionId}/grade', [InstructorSubmissionController::class, 'gradeSubmission']);
+		Route::get('/submissions/{submissionId}/download', [InstructorSubmissionController::class, 'downloadSubmissionFile']);
+		Route::get('/modules/{moduleId}/submissions', [InstructorSubmissionController::class, 'getModuleSubmissions']);
 	});
 	
 	// Learner routes
@@ -167,5 +168,16 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
 		Route::post('/notifications/{id}/read', [\App\Http\Controllers\LearnerNotificationController::class, 'markAsRead']);
 		Route::post('/notifications/read-all', [\App\Http\Controllers\LearnerNotificationController::class, 'markAllAsRead']);
 		Route::delete('/notifications/{id}', [\App\Http\Controllers\LearnerNotificationController::class, 'destroy']);
+	});
+	
+	// Admin routes
+	Route::prefix('admin')->group(function () {
+		Route::get('/students', [AdminController::class, 'getAllStudents']);
+		Route::get('/instructors', [AdminController::class, 'getAllInstructors']);
+		Route::get('/instructors/{instructorId}', [AdminController::class, 'getInstructorDetails']);
+		Route::put('/instructors/{instructorId}/status', [AdminController::class, 'updateInstructorStatus']);
+		Route::get('/instructors/{instructorId}/cv', [AdminController::class, 'downloadInstructorCV']);
+		Route::get('/courses', [AdminController::class, 'getAllCourses']);
+		Route::delete('/courses/{courseId}', [AdminController::class, 'deleteCourse']);
 	});
 });

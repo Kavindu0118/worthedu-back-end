@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Instructor Status Update</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        h1 { color: #333; }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button.approve { background: #28a745; }
+        button.approve:hover { background: #218838; }
+        button.reject { background: #dc3545; }
+        button.reject:hover { background: #c82333; }
+        button.pending { background: #ffc107; }
+        button.pending:hover { background: #e0a800; }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        input, select, textarea {
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        input[type="text"], input[type="number"] {
+            width: 300px;
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+        }
+        .instructor-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-pending { background: #ffc107; color: #000; }
+        .status-approved { background: #28a745; color: white; }
+        .status-rejected { background: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <h1>Admin - Instructor Status Management</h1>
+    
+    <div class="section">
+        <h2>Configuration</h2>
+        <label>API Base URL: </label><br>
+        <input type="text" id="apiUrl" value="http://localhost/learning-lms/public/api" /><br>
+        <label>API Token: </label><br>
+        <input type="text" id="apiToken" placeholder="Enter your admin API token" />
+    </div>
+
+    <div class="section">
+        <h2>1. Get All Instructors</h2>
+        <button onclick="getAllInstructors()">Load All Instructors</button>
+        <div id="instructors-list"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. Update Instructor Status</h2>
+        <label>Instructor ID:</label><br>
+        <input type="number" id="instructorId" placeholder="Enter instructor ID" /><br>
+        
+        <label>New Status:</label><br>
+        <select id="newStatus">
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+        </select><br>
+        
+        <label>Admin Note (optional):</label><br>
+        <textarea id="adminNote" placeholder="Add a note about this status change..."></textarea><br>
+        
+        <button onclick="updateInstructorStatus()">Update Status</button>
+        <div id="update-result"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Get Instructor Details</h2>
+        <label>Instructor ID:</label><br>
+        <input type="number" id="detailsInstructorId" placeholder="Enter instructor ID" />
+        <button onclick="getInstructorDetails()">Get Details</button>
+        <div id="details-result"></div>
+    </div>
+
+    <div class="section">
+        <h2>4. Download Instructor CV</h2>
+        <label>Instructor ID:</label><br>
+        <input type="number" id="cvInstructorId" placeholder="Enter instructor ID" />
+        <button onclick="downloadCV()">Download CV</button>
+        <div id="cv-result"></div>
+    </div>
+
+    <script>
+        function getHeaders() {
+            const token = document.getElementById('apiToken').value;
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            return headers;
+        }
+
+        function getApiUrl() {
+            return document.getElementById('apiUrl').value;
+        }
+
+        async function getAllInstructors() {
+            const resultDiv = document.getElementById('instructors-list');
+            resultDiv.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/admin/instructors`, {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    let html = `<p class="success">✓ Found ${data.total_instructors} instructors</p>`;
+                    html += `<p>Status Summary: Pending: ${data.status_summary.pending}, Approved: ${data.status_summary.approved}, Rejected: ${data.status_summary.rejected}</p>`;
+                    
+                    data.instructors.forEach(instructor => {
+                        const statusClass = `status-${instructor.status}`;
+                        html += `
+                            <div class="instructor-item">
+                                <strong>${instructor.name}</strong> 
+                                <span class="status-badge ${statusClass}">${instructor.status}</span><br>
+                                <small>ID: ${instructor.instructor_id} | Email: ${instructor.email}</small><br>
+                                <small>Courses: ${instructor.courses_count} | Students: ${instructor.total_students}</small><br>
+                                ${instructor.note ? `<small>Note: ${instructor.note}</small><br>` : ''}
+                                <button onclick="quickUpdateStatus(${instructor.instructor_id}, 'approved')" class="approve">Approve</button>
+                                <button onclick="quickUpdateStatus(${instructor.instructor_id}, 'rejected')" class="reject">Reject</button>
+                                <button onclick="quickUpdateStatus(${instructor.instructor_id}, 'pending')" class="pending">Set Pending</button>
+                            </div>
+                        `;
+                    });
+                    
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = `<p class="error">✗ Error: ${data.message || 'Unknown error'}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">✗ Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function updateInstructorStatus() {
+            const instructorId = document.getElementById('instructorId').value;
+            const status = document.getElementById('newStatus').value;
+            const note = document.getElementById('adminNote').value;
+            const resultDiv = document.getElementById('update-result');
+            
+            if (!instructorId) {
+                resultDiv.innerHTML = '<p class="error">Please enter an instructor ID</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>Updating...</p>';
+            
+            try {
+                const body = { status };
+                if (note) body.note = note;
+                
+                const response = await fetch(`${getApiUrl()}/admin/instructors/${instructorId}/status`, {
+                    method: 'PUT',
+                    headers: getHeaders(),
+                    body: JSON.stringify(body)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✓ ${data.message}</p>
+                        <pre>${JSON.stringify(data.instructor, null, 2)}</pre>
+                    `;
+                    // Refresh the instructors list
+                    getAllInstructors();
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">✗ Error (${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">✗ Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function quickUpdateStatus(instructorId, newStatus) {
+            if (!confirm(`Are you sure you want to change instructor ${instructorId} status to ${newStatus}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/admin/instructors/${instructorId}/status`, {
+                    method: 'PUT',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ status: newStatus })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    alert('Status updated successfully!');
+                    getAllInstructors();
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Network Error: ' + error.message);
+            }
+        }
+
+        async function getInstructorDetails() {
+            const instructorId = document.getElementById('detailsInstructorId').value;
+            const resultDiv = document.getElementById('details-result');
+            
+            if (!instructorId) {
+                resultDiv.innerHTML = '<p class="error">Please enter an instructor ID</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/admin/instructors/${instructorId}`, {
+                    method: 'GET',
+                    headers: getHeaders()
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✓ Instructor Details Retrieved</p>
+                        <pre>${JSON.stringify(data.instructor, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">✗ Error (${response.status})</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">✗ Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function downloadCV() {
+            const instructorId = document.getElementById('cvInstructorId').value;
+            const resultDiv = document.getElementById('cv-result');
+            
+            if (!instructorId) {
+                resultDiv.innerHTML = '<p class="error">Please enter an instructor ID</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p>Downloading...</p>';
+            
+            try {
+                const token = document.getElementById('apiToken').value;
+                const url = `${getApiUrl()}/admin/instructors/${instructorId}/cv`;
+                
+                // Open in new window to trigger download
+                const downloadUrl = token ? 
+                    `${url}?token=${encodeURIComponent(token)}` : 
+                    url;
+                
+                window.open(downloadUrl, '_blank');
+                
+                resultDiv.innerHTML = '<p class="success">✓ Download initiated in new window</p>';
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">✗ Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

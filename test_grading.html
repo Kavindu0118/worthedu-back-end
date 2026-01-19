@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instructor Grading API Test Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 25px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .response {
+            background-color: #f5f5f5;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            border-left: 4px solid #ccc;
+        }
+
+        .response.success {
+            background-color: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+
+        .response.error {
+            background-color: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+
+        .response.loading {
+            background-color: #d1ecf1;
+            border-left-color: #17a2b8;
+            color: #0c5460;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .info-box h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+        }
+
+        .info-box li {
+            margin: 5px 0;
+            color: #333;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            border: 2px solid #e0e0e0;
+            text-align: center;
+        }
+
+        .stat-card h4 {
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .stat-card p {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .grade-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .grade-A { background: #4CAF50; color: white; }
+        .grade-B { background: #2196F3; color: white; }
+        .grade-C { background: #FF9800; color: white; }
+        .grade-D { background: #FF5722; color: white; }
+        .grade-F { background: #f44336; color: white; }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        small {
+            color: #888;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 Instructor Grading API Test</h1>
+            <p>Complete testing interface for assignment submission grading system</p>
+        </div>
+
+        <div class="content">
+            <!-- Info Box -->
+            <div class="info-box">
+                <h3>📋 Available Tests</h3>
+                <ul>
+                    <li>View all submissions for an assignment</li>
+                    <li>Get detailed submission information</li>
+                    <li>Grade submissions with marks and feedback</li>
+                    <li>Get module-level submission overview</li>
+                    <li>Download submission files</li>
+                </ul>
+            </div>
+
+            <!-- API Token Configuration -->
+            <div class="test-section">
+                <h2>🔑 API Configuration</h2>
+                <div class="form-group">
+                    <label for="apiToken">API Token (Required):</label>
+                    <input 
+                        type="text" 
+                        id="apiToken" 
+                        placeholder="Enter your Bearer token here">
+                    <small>Get your token from the login endpoint or database</small>
+                </div>
+                <button onclick="saveToken()">💾 Save Token</button>
+            </div>
+
+            <!-- Test 1: Get Assignment Submissions -->
+            <div class="test-section">
+                <h2>1️⃣ Get Assignment Submissions</h2>
+                <p style="margin-bottom: 15px; color: #666;">
+                    View all student submissions for a specific assignment with statistics.
+                </p>
+                
+                <div class="form-group">
+                    <label for="assignmentId1">Assignment ID:</label>
+                    <input type="number" id="assignmentId1" value="1" min="1">
+                </div>
+                
+                <button onclick="getAssignmentSubmissions()">
+                    📚 Get Submissions
+                </button>
+                
+                <div id="response1" class="response" style="display: none;"></div>
+            </div>
+
+            <!-- Test 2: Get Submission Details -->
+            <div class="test-section">
+                <h2>2️⃣ Get Submission Details</h2>
+                <p style="margin-bottom: 15px; color: #666;">
+                    View detailed information about a specific submission including student info.
+                </p>
+                
+                <div class="form-group">
+                    <label for="submissionId1">Submission ID:</label>
+                    <input type="number" id="submissionId1" value="1" min="1">
+                </div>
+                
+                <button onclick="getSubmissionDetails()">
+                    🔍 Get Details
+                </button>
+                
+                <div id="response2" class="response" style="display: none;"></div>
+            </div>
+
+            <!-- Test 3: Grade Submission -->
+            <div class="test-section">
+                <h2>3️⃣ Grade Submission</h2>
+                <p style="margin-bottom: 15px; color: #666;">
+                    Assign marks, letter grade, and feedback to a student submission.
+                </p>
+                
+                <div class="form-group">
+                    <label for="submissionId2">Submission ID:</label>
+                    <input type="number" id="submissionId2" value="1" min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="marks">Marks Obtained (Required):</label>
+                    <input type="number" id="marks" value="85" min="0" max="100" step="0.01">
+                    <small>Enter score between 0 and the assignment's maximum points</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="grade">Letter Grade (Optional):</label>
+                    <select id="grade">
+                        <option value="">🤖 Auto-calculate from percentage</option>
+                        <option value="A">A (93-100%)</option>
+                        <option value="A-">A- (90-92%)</option>
+                        <option value="B+">B+ (87-89%)</option>
+                        <option value="B" selected>B (83-86%)</option>
+                        <option value="B-">B- (80-82%)</option>
+                        <option value="C+">C+ (77-79%)</option>
+                        <option value="C">C (73-76%)</option>
+                        <option value="C-">C- (70-72%)</option>
+                        <option value="D+">D+ (67-69%)</option>
+                        <option value="D">D (60-66%)</option>
+                        <option value="F">F (Below 60%)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="feedback">Feedback (Optional):</label>
+                    <textarea 
+                        id="feedback" 
+                        rows="5" 
+                        maxlength="2000" 
+                        placeholder="Provide constructive feedback to help the student improve...">Excellent work! Your code is well-structured and follows best practices. The documentation is clear and comprehensive. Keep up the great work!</textarea>
+                    <small><span id="charCount">185</span>/2000 characters</small>
+                </div>
+                
+                <button onclick="gradeSubmission()">
+                    ✅ Submit Grade
+                </button>
+                
+                <div id="response3" class="response" style="display: none;"></div>
+            </div>
+
+            <!-- Test 4: Get Module Submissions -->
+            <div class="test-section">
+                <h2>4️⃣ Get Module Submissions Overview</h2>
+                <p style="margin-bottom: 15px; color: #666;">
+                    View submission statistics for all assignments in a module.
+                </p>
+                
+                <div class="form-group">
+                    <label for="moduleId">Module ID:</label>
+                    <input type="number" id="moduleId" value="1" min="1">
+                </div>
+                
+                <button onclick="getModuleSubmissions()">
+                    📊 Get Overview
+                </button>
+                
+                <div id="response4" class="response" style="display: none;"></div>
+            </div>
+
+            <!-- Test 5: Download Submission File -->
+            <div class="test-section">
+                <h2>5️⃣ Download Submission File</h2>
+                <p style="margin-bottom: 15px; color: #666;">
+                    Download the file attached to a student's submission.
+                </p>
+                
+                <div class="form-group">
+                    <label for="submissionId3">Submission ID:</label>
+                    <input type="number" id="submissionId3" value="1" min="1">
+                </div>
+                
+                <button onclick="downloadSubmissionFile()">
+                    📥 Download File
+                </button>
+                
+                <div id="response5" class="response" style="display: none;"></div>
+            </div>
+
+            <!-- Test All Button -->
+            <div class="test-section" style="text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h2 style="border-bottom: 2px solid white;">🚀 Run All Tests</h2>
+                <p style="margin-bottom: 15px;">
+                    Execute all API tests sequentially to verify complete functionality.
+                </p>
+                <button 
+                    onclick="runAllTests()" 
+                    style="background: white; color: #667eea; font-size: 18px; padding: 15px 40px;">
+                    ▶️ Run Complete Test Suite
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost/learning-lms/public/api/instructor';
+
+        // Update character count for feedback
+        document.getElementById('feedback').addEventListener('input', function() {
+            document.getElementById('charCount').textContent = this.value.length;
+        });
+
+        function saveToken() {
+            const token = document.getElementById('apiToken').value.trim();
+            if (!token) {
+                alert('❌ Please enter an API token!');
+                return;
+            }
+            localStorage.setItem('api_token', token);
+            alert('✅ API token saved successfully!');
+        }
+
+        function getAuthToken() {
+            const token = localStorage.getItem('api_token') || document.getElementById('apiToken').value.trim();
+            if (!token) {
+                alert('❌ Please enter and save your API token first!');
+                return null;
+            }
+            return token;
+        }
+
+        function showLoading(responseId) {
+            const div = document.getElementById(responseId);
+            div.style.display = 'block';
+            div.className = 'response loading';
+            div.innerHTML = '<div class="loading-spinner"></div> Loading...';
+        }
+
+        function showResponse(responseId, data, isSuccess) {
+            const div = document.getElementById(responseId);
+            div.style.display = 'block';
+            div.className = isSuccess ? 'response success' : 'response error';
+            div.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function getAssignmentSubmissions() {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const assignmentId = document.getElementById('assignmentId1').value;
+            if (!assignmentId) {
+                alert('❌ Please enter an assignment ID!');
+                return;
+            }
+
+            showLoading('response1');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/assignments/${assignmentId}/submissions`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                const data = await response.json();
+                showResponse('response1', data, response.ok);
+                
+                if (response.ok && data.success) {
+                    alert(`✅ Successfully retrieved ${data.submissions?.length || 0} submissions!`);
+                }
+            } catch (error) {
+                showResponse('response1', { error: error.message }, false);
+            }
+        }
+
+        async function getSubmissionDetails() {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const submissionId = document.getElementById('submissionId1').value;
+            if (!submissionId) {
+                alert('❌ Please enter a submission ID!');
+                return;
+            }
+
+            showLoading('response2');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/submissions/${submissionId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                const data = await response.json();
+                showResponse('response2', data, response.ok);
+                
+                if (response.ok && data.success) {
+                    alert('✅ Successfully retrieved submission details!');
+                }
+            } catch (error) {
+                showResponse('response2', { error: error.message }, false);
+            }
+        }
+
+        async function gradeSubmission() {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const submissionId = document.getElementById('submissionId2').value;
+            const marks = parseFloat(document.getElementById('marks').value);
+            const grade = document.getElementById('grade').value;
+            const feedback = document.getElementById('feedback').value.trim();
+
+            if (!submissionId) {
+                alert('❌ Please enter a submission ID!');
+                return;
+            }
+
+            if (isNaN(marks) || marks < 0) {
+                alert('❌ Please enter a valid marks value (minimum 0)!');
+                return;
+            }
+
+            const gradeData = {
+                marks_obtained: marks,
+            };
+
+            if (feedback) {
+                gradeData.feedback = feedback;
+            }
+
+            if (grade) {
+                gradeData.grade = grade;
+            }
+
+            showLoading('response3');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/submissions/${submissionId}/grade`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(gradeData),
+                });
+                
+                const data = await response.json();
+                showResponse('response3', data, response.ok);
+                
+                if (response.ok && data.success) {
+                    alert(`✅ Submission graded successfully!\nMarks: ${data.submission.marks_obtained}/${data.submission.max_points}\nGrade: ${data.submission.grade}`);
+                }
+            } catch (error) {
+                showResponse('response3', { error: error.message }, false);
+            }
+        }
+
+        async function getModuleSubmissions() {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const moduleId = document.getElementById('moduleId').value;
+            if (!moduleId) {
+                alert('❌ Please enter a module ID!');
+                return;
+            }
+
+            showLoading('response4');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/modules/${moduleId}/submissions`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                const data = await response.json();
+                showResponse('response4', data, response.ok);
+                
+                if (response.ok && data.success) {
+                    alert(`✅ Successfully retrieved overview for ${data.assignments?.length || 0} assignments!`);
+                }
+            } catch (error) {
+                showResponse('response4', { error: error.message }, false);
+            }
+        }
+
+        async function downloadSubmissionFile() {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const submissionId = document.getElementById('submissionId3').value;
+            if (!submissionId) {
+                alert('❌ Please enter a submission ID!');
+                return;
+            }
+
+            showLoading('response5');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/submissions/${submissionId}/download`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    
+                    // Try to get filename from Content-Disposition header
+                    const contentDisposition = response.headers.get('Content-Disposition');
+                    let filename = 'submission_file';
+                    if (contentDisposition) {
+                        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.URL.revokeObjectURL(url);
+                    
+                    showResponse('response5', { 
+                        success: true, 
+                        message: 'File download started successfully!',
+                        filename: filename 
+                    }, true);
+                    alert('✅ File download started successfully!');
+                } else {
+                    const data = await response.json();
+                    showResponse('response5', data, false);
+                }
+            } catch (error) {
+                showResponse('response5', { error: error.message }, false);
+            }
+        }
+
+        async function runAllTests() {
+            if (!confirm('🚀 Run all tests sequentially?\n\nThis will execute all API tests one after another.')) {
+                return;
+            }
+
+            const token = getAuthToken();
+            if (!token) return;
+
+            alert('⏳ Starting complete test suite...');
+
+            // Test 1
+            await getAssignmentSubmissions();
+            await sleep(1000);
+
+            // Test 2
+            await getSubmissionDetails();
+            await sleep(1000);
+
+            // Test 3
+            await gradeSubmission();
+            await sleep(1000);
+
+            // Test 4
+            await getModuleSubmissions();
+            await sleep(1000);
+
+            alert('✅ All tests completed! Check the results above.');
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // Load saved token on page load
+        window.onload = function() {
+            const savedToken = localStorage.getItem('api_token');
+            if (savedToken) {
+                document.getElementById('apiToken').value = savedToken;
+            }
+        };
+    </script>
+</body>
+</html>
