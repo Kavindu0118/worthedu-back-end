@@ -57,6 +57,11 @@ class ModuleAssignment extends Model
         return $this->belongsTo(CourseModule::class, 'module_id');
     }
 
+    public function submissions()
+    {
+        return $this->hasMany(AssignmentSubmission::class, 'assignment_id');
+    }
+
     public function getTitleAttribute()
     {
         return $this->attributes['assignment_title'] ?? null;

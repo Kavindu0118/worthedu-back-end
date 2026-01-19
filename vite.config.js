@@ -10,4 +10,13 @@ export default defineConfig({
         }),
         tailwindcss(),
     ],
+    server: {
+        proxy: {
+            '/api': {
+                target: 'http://localhost/learning-lms/public',
+                changeOrigin: true,
+                secure: false,
+            }
+        }
+    }
 });

@@ -198,15 +198,43 @@ class InstructorSubmissionController extends Controller
                 ], 404);
             }
 
-            // Validate the request
+            // Log the incoming request data for debugging
+            \Log::info('Grade submission request', [
+                'submission_id' => $submissionId,
+                'request_data' => $request->all(),
+                'max_points' => $submission->assignment->max_points
+            ]);
+
+            // Validate the request - support both 'marks_obtained' and 'score' fields
             $validated = $request->validate([
-                'marks_obtained' => 'required|numeric|min:0|max:' . $submission->assignment->max_points,
+                'marks_obtained' => 'sometimes|numeric|min:0|max:' . $submission->assignment->max_points,
+                'score' => 'sometimes|numeric|min:0|max:' . $submission->assignment->max_points,
+                'marks' => 'sometimes|numeric|min:0|max:' . $submission->assignment->max_points,
                 'feedback' => 'nullable|string|max:2000',
                 'grade' => 'nullable|string|in:A,A-,B+,B,B-,C+,C,C-,D+,D,F',
             ]);
 
+            // Determine which field contains the marks
+            $marksObtained = $validated['marks_obtained'] ?? $validated['score'] ?? $validated['marks'] ?? null;
+            
+            if ($marksObtained === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation error',
+                    'errors' => ['marks_obtained' => ['The marks obtained field is required.']],
+                ], 422);
+            }
+
+            if ($marksObtained === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation error',
+                    'errors' => ['marks_obtained' => ['The marks obtained field is required.']],
+                ], 422);
+            }
+
             // Update the submission
-            $submission->marks_obtained = $validated['marks_obtained'];
+            $submission->marks_obtained = $marksObtained;
             $submission->feedback = $validated['feedback'] ?? null;
             $submission->status = 'graded';
             $submission->graded_by = auth()->id() ?? 1; // Use authenticated user ID
@@ -214,7 +242,7 @@ class InstructorSubmissionController extends Controller
             $submission->save();
 
             // Calculate grade if not provided
-            $percentage = ($validated['marks_obtained'] / $submission->assignment->max_points) * 100;
+            $percentage = ($marksObtained / $submission->assignment->max_points) * 100;
             $calculatedGrade = $validated['grade'] ?? $this->calculateGradeLetter($percentage);
 
             return response()->json([
