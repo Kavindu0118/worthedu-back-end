@@ -16,6 +16,7 @@ export default defineConfig({
                 target: 'http://localhost/learning-lms/public',
                 changeOrigin: true,
                 secure: false,
+                rewrite: (path) => path,
             }
         }
     }

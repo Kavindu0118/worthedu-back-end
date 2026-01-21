@@ -7,9 +7,12 @@ use App\Models\Enrollment;
 use App\Models\LessonProgress;
 use App\Models\CourseModule;
 use App\Models\Lesson;
+use App\Models\Test;
+use App\Models\TestSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class LearnerCourseController extends Controller
 {
@@ -144,12 +147,12 @@ class LearnerCourseController extends Controller
             ], 403);
         }
         
-        // Load course with all nested relationships
+        // Load course with all nested relationships including tests
         $course = Course::with([
             'instructor.user:id,name,email',
             'courseModules' => function($q) use ($user) {
                 $q->orderBy('order_index')
-                  ->with(['notes', 'quizzes', 'assignments']);
+                  ->with(['notes', 'quizzes', 'assignments', 'tests']);
             }
         ])->findOrFail($id);
         
@@ -165,7 +168,7 @@ class LearnerCourseController extends Controller
             // TODO: Track note completion status in future
         }
         
-        // Map modules with notes (lessons), quizzes, and assignments
+        // Map modules with notes (lessons), quizzes, tests, and assignments
         $modules = $course->courseModules->map(function ($module) use ($user) {
             return [
                 'id' => $module->id,
@@ -194,6 +197,16 @@ class LearnerCourseController extends Controller
                         'created_at' => $quiz->created_at->toISOString(),
                     ];
                 }),
+                'tests' => $module->tests
+                    ->filter(function($test) {
+                        // Only show tests that are published or have visibility_status = 'visible'
+                        return $test->visibility_status === 'visible' || 
+                               $test->status === 'active' || 
+                               $test->status === 'scheduled';
+                    })
+                    ->map(function ($test) use ($user) {
+                        return $this->formatTestForLearner($test, $user->id);
+                    })->values(),
                 'assignments' => $module->assignments->map(function ($assignment) {
                     return [
                         'id' => $assignment->id,
@@ -343,5 +356,75 @@ class LearnerCourseController extends Controller
                 'modules' => $moduleProgress,
             ],
         ]);
+    }
+
+    /**
+     * Format test data for learner view with submission status
+     */
+    private function formatTestForLearner($test, $learnerId)
+    {
+        $now = Carbon::now();
+        $startDate = Carbon::parse($test->start_date);
+        $endDate = Carbon::parse($test->end_date);
+        
+        // Calculate test status based on dates
+        if ($now->lt($startDate)) {
+            $status = 'scheduled'; // Not yet available
+        } elseif ($now->gte($startDate) && $now->lte($endDate)) {
+            $status = 'active'; // Can take test now
+        } else {
+            $status = 'closed'; // Deadline passed
+        }
+        
+        // Get submission information for this learner
+        $submissions = TestSubmission::where('test_id', $test->id)
+            ->where('student_id', $learnerId)
+            ->orderBy('attempt_number', 'desc')
+            ->get();
+        
+        $attemptsUsed = $submissions->count();
+        $latestSubmission = $submissions->first();
+        
+        $submissionStatus = null;
+        $gradingStatus = null;
+        $submittedAt = null;
+        $totalScore = null;
+        $attemptNumber = 0;
+        
+        if ($latestSubmission) {
+            // Check if submitted or in progress
+            $submissionStatus = $latestSubmission->submitted_at ? 'submitted' : 'in_progress';
+            
+            // Check grading status
+            if ($latestSubmission->grading_status === 'graded' || $latestSubmission->grading_status === 'published') {
+                $gradingStatus = $latestSubmission->grading_status;
+            }
+            
+            $submittedAt = $latestSubmission->submitted_at;
+            $totalScore = $latestSubmission->total_score;
+            $attemptNumber = $latestSubmission->attempt_number;
+        }
+        
+        return [
+            'id' => $test->id,
+            'test_title' => $test->test_title,
+            'test_description' => $test->test_description,
+            'instructions' => $test->instructions,
+            'total_marks' => $test->total_marks,
+            'passing_marks' => $test->passing_marks,
+            'time_limit' => $test->time_limit,
+            'max_attempts' => $test->max_attempts,
+            'start_date' => $startDate->toIso8601String(),
+            'end_date' => $endDate->toIso8601String(),
+            'status' => $status,
+            'is_published' => $test->visibility_status === 'visible' || $test->status !== 'draft',
+            'submission_status' => $submissionStatus,
+            'grading_status' => $gradingStatus,
+            'submitted_at' => $submittedAt ? Carbon::parse($submittedAt)->toIso8601String() : null,
+            'attempt_number' => $attemptNumber,
+            'total_score' => $totalScore,
+            'attempts_used' => $attemptsUsed,
+            'attempts_remaining' => max(0, $test->max_attempts - $attemptsUsed),
+        ];
     }
 }

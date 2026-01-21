@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Get Current User Token</title>
+</head>
+<body>
+    <h2>Current Login Information</h2>
+    <div id="info"></div>
+    
+    <script>
+        const token = localStorage.getItem('api_token');
+        const userStr = localStorage.getItem('user');
+        
+        const infoDiv = document.getElementById('info');
+        
+        if (token && userStr) {
+            const user = JSON.parse(userStr);
+            infoDiv.innerHTML = `
+                <p><strong>Logged in as:</strong> ${user.name}</p>
+                <p><strong>Email:</strong> ${user.email}</p>
+                <p><strong>Role:</strong> ${user.role}</p>
+                <p><strong>User ID:</strong> ${user.id}</p>
+                <br>
+                <p><strong>Token:</strong></p>
+                <textarea style="width: 100%; height: 100px;">${token}</textarea>
+                <br><br>
+                <button onclick="copyToken()">Copy Token</button>
+            `;
+        } else {
+            infoDiv.innerHTML = '<p>No user logged in</p>';
+        }
+        
+        function copyToken() {
+            const token = localStorage.getItem('api_token');
+            navigator.clipboard.writeText(token);
+            alert('Token copied!');
+        }
+    </script>
+</body>
+</html>

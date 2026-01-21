@@ -15,6 +15,8 @@ use App\Http\Controllers\StripePaymentController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\InstructorSubmissionController;
+use App\Http\Controllers\InstructorTestController;
+use App\Http\Controllers\StudentTestController;
 use App\Http\Middleware\ApiTokenAuth;
 use Illuminate\Http\Request;
 
@@ -115,6 +117,18 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
 		Route::put('/submissions/{submissionId}/grade', [InstructorSubmissionController::class, 'gradeSubmission']);
 		Route::get('/submissions/{submissionId}/download', [InstructorSubmissionController::class, 'downloadSubmissionFile']);
 		Route::get('/modules/{moduleId}/submissions', [InstructorSubmissionController::class, 'getModuleSubmissions']);
+
+		// Test management
+		Route::get('/courses/{courseId}/tests', [InstructorTestController::class, 'getTestsByCourse']);
+		Route::post('/tests', [InstructorTestController::class, 'store']);
+		Route::get('/tests/{testId}', [InstructorTestController::class, 'show']);
+		Route::put('/tests/{testId}', [InstructorTestController::class, 'update']);
+		Route::delete('/tests/{testId}', [InstructorTestController::class, 'destroy']);
+		Route::get('/tests/{testId}/submissions', [InstructorTestController::class, 'getSubmissions']);
+		Route::get('/test-submissions/{submissionId}', [InstructorTestController::class, 'getSubmissionDetails']);
+		Route::post('/test-submissions/{submissionId}/grade', [InstructorTestController::class, 'gradeSubmission']);
+		Route::post('/tests/{testId}/publish-results', [InstructorTestController::class, 'publishResults']);
+		Route::get('/tests/{testId}/statistics', [InstructorTestController::class, 'getStatistics']);
 	});
 	
 	// Learner routes
@@ -162,6 +176,14 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
 		Route::post('/quiz-attempts/{attemptId}/submit', [\App\Http\Controllers\LearnerQuizController::class, 'submitQuiz']);
 		Route::get('/quiz-attempts/{attemptId}', [\App\Http\Controllers\LearnerQuizController::class, 'getAttempt']);
 		
+		// Tests
+		Route::get('/tests/{testId}', [StudentTestController::class, 'show']);
+		Route::post('/tests/{testId}/start', [StudentTestController::class, 'startTest']);
+		Route::post('/test-submissions/{submissionId}/submit', [StudentTestController::class, 'submitTest']);
+		Route::post('/test-submissions/{submissionId}/upload', [StudentTestController::class, 'uploadFile']);
+		Route::post('/test-submissions/{submissionId}/autosave', [StudentTestController::class, 'autosave']);
+		Route::get('/tests/{testId}/results', [StudentTestController::class, 'getResults']);
+		
 		// Notifications
 		Route::get('/notifications', [\App\Http\Controllers\LearnerNotificationController::class, 'index']);
 		Route::get('/notifications/unread-count', [\App\Http\Controllers\LearnerNotificationController::class, 'unreadCount']);
@@ -170,6 +192,21 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
 		Route::delete('/notifications/{id}', [\App\Http\Controllers\LearnerNotificationController::class, 'destroy']);
 	});
 	
+	// Student routes (alias for learner test routes - for frontend compatibility)
+	Route::prefix('student')->group(function () {
+		Route::get('/tests/{testId}', [StudentTestController::class, 'show']);
+		Route::post('/tests/{testId}/start', [StudentTestController::class, 'startTest']);
+		Route::post('/test-submissions/{submissionId}/submit', [StudentTestController::class, 'submitTest']);
+		Route::post('/test-submissions/{submissionId}/upload', [StudentTestController::class, 'uploadFile']);
+		Route::post('/test-submissions/{submissionId}/autosave', [StudentTestController::class, 'autosave']);
+		Route::get('/tests/{testId}/results', [StudentTestController::class, 'getResults']);
+		
+		// Alternate paths (without 'test-' prefix) for frontend compatibility
+		Route::post('/submissions/{submissionId}/submit', [StudentTestController::class, 'submitTest']);
+		Route::post('/submissions/{submissionId}/upload', [StudentTestController::class, 'uploadFile']);
+		Route::post('/submissions/{submissionId}/autosave', [StudentTestController::class, 'autosave']);
+	});
+
 	// Admin routes
 	Route::prefix('admin')->group(function () {
 		Route::get('/students', [AdminController::class, 'getAllStudents']);
