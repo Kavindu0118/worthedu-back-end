@@ -8,6 +8,11 @@ use App\Models\Certificate;
 use App\Models\LearnerActivityLog;
 use App\Models\AssignmentSubmission;
 use App\Models\Notification;
+use App\Models\CourseModule;
+use App\Models\LessonProgress;
+use App\Models\QuizAttempt;
+use App\Models\Test;
+use App\Models\TestSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -55,13 +60,16 @@ class LearnerDashboardController extends Controller
             ->orderBy('last_accessed_at', 'desc')
             ->limit(3)
             ->get()
-            ->map(function ($enrollment) {
+            ->map(function ($enrollment) use ($user) {
+                $progressDetails = $this->calculateCourseProgress($enrollment->course_id, $user->id);
+                
                 return [
                     'id' => $enrollment->course->id,
                     'title' => $enrollment->course->title,
                     'thumbnail' => $enrollment->course->thumbnail ? asset('storage/' . $enrollment->course->thumbnail) : null,
                     'progress' => (float) $enrollment->progress,
                     'lastAccessed' => $enrollment->last_accessed_at ? $enrollment->last_accessed_at->diffForHumans() : null,
+                    'progressDetails' => $progressDetails,
                 ];
             });
         
@@ -604,5 +612,122 @@ class LearnerDashboardController extends Controller
             'success' => true,
             'data' => $certificates
         ]);
+    }
+
+    /**
+     * Calculate detailed course progress including modules, quizzes, assignments, and tests
+     */
+    private function calculateCourseProgress($courseId, $userId)
+    {
+        // Get all modules for the course
+        $modules = CourseModule::where('course_id', $courseId)->get();
+        
+        $totalItems = 0;
+        $completedItems = 0;
+        
+        $moduleCount = $modules->count();
+        $completedModules = 0;
+        
+        $quizCount = 0;
+        $completedQuizzes = 0;
+        
+        $assignmentCount = 0;
+        $completedAssignments = 0;
+        
+        $testCount = 0;
+        $completedTests = 0;
+        
+        foreach ($modules as $module) {
+            // Check module completion (via lesson_progress)
+            $moduleProgress = LessonProgress::where('user_id', $userId)
+                ->where('lesson_id', $module->id)
+                ->where('status', 'completed')
+                ->exists();
+            
+            if ($moduleProgress) {
+                $completedModules++;
+            }
+            
+            // Count quizzes in this module
+            $quizzes = \App\Models\ModuleQuiz::where('module_id', $module->id)->get();
+            foreach ($quizzes as $quiz) {
+                $quizCount++;
+                
+                // Check if quiz is completed (at least one successful attempt)
+                $quizCompleted = QuizAttempt::where('user_id', $userId)
+                    ->where('quiz_id', $quiz->id)
+                    ->where('status', 'completed')
+                    ->exists();
+                
+                if ($quizCompleted) {
+                    $completedQuizzes++;
+                }
+            }
+            
+            // Count assignments in this module
+            $assignments = \App\Models\ModuleAssignment::where('module_id', $module->id)->get();
+            foreach ($assignments as $assignment) {
+                $assignmentCount++;
+                
+                // Check if assignment is submitted
+                $assignmentSubmitted = AssignmentSubmission::where('user_id', $userId)
+                    ->where('assignment_id', $assignment->id)
+                    ->whereIn('status', ['submitted', 'graded'])
+                    ->exists();
+                
+                if ($assignmentSubmitted) {
+                    $completedAssignments++;
+                }
+            }
+            
+            // Count tests in this module
+            $tests = Test::where('module_id', $module->id)->get();
+            foreach ($tests as $test) {
+                $testCount++;
+                
+                // Check if test is submitted
+                $testSubmitted = TestSubmission::where('student_id', $userId)
+                    ->where('test_id', $test->id)
+                    ->whereIn('submission_status', ['submitted', 'late'])
+                    ->exists();
+                
+                if ($testSubmitted) {
+                    $completedTests++;
+                }
+            }
+        }
+        
+        // Calculate total items and completed items
+        $totalItems = $moduleCount + $quizCount + $assignmentCount + $testCount;
+        $completedItems = $completedModules + $completedQuizzes + $completedAssignments + $completedTests;
+        
+        // Calculate overall percentage
+        $overallPercentage = $totalItems > 0 ? round(($completedItems / $totalItems) * 100, 1) : 0;
+        
+        return [
+            'overall_percentage' => $overallPercentage,
+            'modules' => [
+                'total' => $moduleCount,
+                'completed' => $completedModules,
+                'percentage' => $moduleCount > 0 ? round(($completedModules / $moduleCount) * 100, 1) : 0
+            ],
+            'quizzes' => [
+                'total' => $quizCount,
+                'completed' => $completedQuizzes,
+                'percentage' => $quizCount > 0 ? round(($completedQuizzes / $quizCount) * 100, 1) : 0
+            ],
+            'assignments' => [
+                'total' => $assignmentCount,
+                'completed' => $completedAssignments,
+                'percentage' => $assignmentCount > 0 ? round(($completedAssignments / $assignmentCount) * 100, 1) : 0
+            ],
+            'tests' => [
+                'total' => $testCount,
+                'completed' => $completedTests,
+                'percentage' => $testCount > 0 ? round(($completedTests / $testCount) * 100, 1) : 0
+            ],
+            'total_items' => $totalItems,
+            'completed_items' => $completedItems,
+        ];
     }
 }

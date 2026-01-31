@@ -13,12 +13,26 @@ class Certificate extends Model
         'user_id',
         'course_id',
         'certificate_number',
+        'quiz_weight',
+        'assignment_weight',
+        'test_weight',
+        'final_grade',
+        'letter_grade',
+        'status',
+        'completed_at',
         'issued_at',
+        'can_view',
         'file_path',
     ];
 
     protected $casts = [
         'issued_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'quiz_weight' => 'decimal:2',
+        'assignment_weight' => 'decimal:2',
+        'test_weight' => 'decimal:2',
+        'final_grade' => 'decimal:2',
+        'can_view' => 'boolean',
     ];
 
     /**

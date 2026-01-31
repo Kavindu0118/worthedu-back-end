@@ -16,13 +16,13 @@ class Enrollment extends Model
         'progress',
         'completed_at',
         'status',
-        'last_accessed',
+        'last_accessed_at',
     ];
 
     protected $casts = [
         'enrolled_at' => 'datetime',
         'completed_at' => 'datetime',
-        'last_accessed' => 'datetime',
+        'last_accessed_at' => 'datetime',
         'progress' => 'decimal:2',
     ];
 

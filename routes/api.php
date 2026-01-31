@@ -140,7 +140,11 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
 		Route::get('/streak', [\App\Http\Controllers\LearnerDashboardController::class, 'streak']);
 		Route::get('/recommendations', [\App\Http\Controllers\LearnerDashboardController::class, 'recommendations']);
 		Route::get('/performance', [\App\Http\Controllers\LearnerDashboardController::class, 'performance']);
-		Route::get('/certificates', [\App\Http\Controllers\LearnerDashboardController::class, 'certificates']);
+		
+		// Certificates (using dedicated CertificateController)
+		Route::get('/certificates', [\App\Http\Controllers\CertificateController::class, 'index']);
+		Route::get('/certificates/{id}', [\App\Http\Controllers\CertificateController::class, 'show']);
+		Route::get('/courses/{courseId}/certificate', [\App\Http\Controllers\CertificateController::class, 'getByCourse']);
 		
 		// Profile
 		Route::get('/profile', [\App\Http\Controllers\LearnerProfileController::class, 'show']);
